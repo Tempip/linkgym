@@ -24,8 +24,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-      - name: Install package with dev extras
-        run: pip install -e ".[dev]"
+      - name: Install package with dev and train extras
+        run: pip install -e ".[dev,train]"
 
       - name: Ruff lint
         run: ruff check .

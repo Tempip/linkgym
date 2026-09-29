@@ -53,25 +53,24 @@ def seeded_sionna_rng(seed: int) -> Iterator[None]:
         generator.set_state(state)
 
 
-class SinrSource(Protocol):
-    """Pre-generates the SINR of a fixed-length episode."""
+class ChannelGainSource(Protocol):
+    """Pre-generates the channel power gain of a fixed-length episode."""
 
     def generate(self, num_slots: int, batch_size: int, seed: int) -> torch.Tensor:
-        """Return linear SINR of shape [batch_size, num_slots, num_freq]."""
+        """Return |h|^2 with unit mean, shape [batch_size, num_slots, num_freq]."""
         ...
 
 
-class TDLSinrSource:
+class TDLChannelGain:
     """3GPP TR 38.901 TDL fading, sampled once per slot and once per PRB.
 
-    SINR = mean SNR * |h|^2. The TDL power delay profile is normalized to unit
-    energy, so ``snr_db`` is the mean SINR over channel realizations.
+    The TDL power delay profile is normalized to unit energy, so |h|^2 has unit
+    mean over channel realizations.
     """
 
     def __init__(
         self,
         *,
-        snr_db: float,
         speed: float,
         tdl_model: str,
         delay_spread: float,
@@ -80,7 +79,6 @@ class TDLSinrSource:
         subcarrier_spacing: float,
         slot_duration: float,
     ) -> None:
-        self._snr = 10.0 ** (snr_db / 10.0)
         self._sampling_frequency = 1.0 / slot_duration
         self._tdl = TDL(
             tdl_model,
@@ -103,7 +101,7 @@ class TDLSinrSource:
             )
         # [batch_size, 1, 1, 1, 1, num_slots, num_prbs]
         h = cir_to_ofdm_channel(self._frequencies, a, tau)
-        return self._snr * h[:, 0, 0, 0, 0].abs().square()
+        return h[:, 0, 0, 0, 0].abs().square()
 
 
 @dataclass(frozen=True)
@@ -116,6 +114,17 @@ class LinkResult:
     decoded_bits: torch.Tensor  # int32, TB information bits on ACK, else 0
     tbler: torch.Tensor  # transport block error probability; the ACK is drawn from it
     cb_bler: torch.Tensor  # code block error probability
+    ack_uniform: torch.Tensor  # uniform draw u in [0, 1); ACK if u >= tbler
+
+
+def sinr_grid(sinr_prb: torch.Tensor, num_data_symbols: int) -> torch.Tensor:
+    """Per-RE SINR grid [B, num_data_symbols, 12 * num_prbs, 1, 1] from [B, num_prbs].
+
+    Each PRB value is repeated over its 12 subcarriers and all data symbols, so Sionna
+    counts exactly ``12 * num_prbs * num_data_symbols`` resource elements.
+    """
+    per_subcarrier = sinr_prb.repeat_interleave(12, dim=1)
+    return per_subcarrier[:, None, :, None, None].expand(-1, num_data_symbols, -1, 1, 1)
 
 
 def tb_size_per_mcs(num_allocated_re: int) -> torch.Tensor:
@@ -158,7 +167,7 @@ def transmit(
     tbler, cb_bler = tbler[:, 0], cb_bler[:, 0]
     ack = u >= tbler
     decoded_bits = torch.where(ack, tb_size[mcs], 0)
-    return LinkResult(mcs, sinr_eff, ack, decoded_bits, tbler, cb_bler)
+    return LinkResult(mcs, sinr_eff, ack, decoded_bits, tbler, cb_bler, u)
 
 
 class LinkSimulator:
@@ -171,7 +180,7 @@ class LinkSimulator:
     :param num_slots: Episode length in slots
     :param batch_size: Number of independent links B
     :param seed: Seed of the episode
-    :param snr_db: Mean SNR [dB]
+    :param snr_db: Mean SNR [dB]; can be changed per episode in :meth:`reset`
     :param speed: UE speed [m/s]
     :param tdl_model: TDL profile, e.g. "A" to "E"
     :param delay_spread: RMS delay spread [s]
@@ -200,6 +209,7 @@ class LinkSimulator:
     ) -> None:
         self.num_slots = num_slots
         self.batch_size = batch_size
+        self.snr_db = snr_db
         self.num_data_symbols = num_data_symbols
         # Data resource elements per slot (single layer)
         self.num_allocated_re = 12 * num_prbs * num_data_symbols
@@ -211,8 +221,7 @@ class LinkSimulator:
         self.phy_abstraction = phy_abstraction
         self._eesm = EESM(device=DEVICE)
         self._tb_size = tb_size_per_mcs(self.num_allocated_re)
-        self._source: SinrSource = TDLSinrSource(
-            snr_db=snr_db,
+        self._source: ChannelGainSource = TDLChannelGain(
             speed=speed,
             tdl_model=tdl_model,
             delay_spread=delay_spread,
@@ -223,25 +232,26 @@ class LinkSimulator:
         )
         self.reset(seed)
 
-    def reset(self, seed: int) -> None:
-        """Generate a new episode from ``seed`` and restart at slot 0."""
+    def reset(self, seed: int, *, snr_db: float | None = None) -> None:
+        """Generate a new episode from ``seed`` and restart at slot 0.
+
+        :param snr_db: New mean SNR [dB]; if `None`, the current ``snr_db`` is kept
+        """
+        if snr_db is not None:
+            self.snr_db = snr_db
         # Independent seeds for the channel and the ACK draws
         channel_seed, ack_seed = (
             int(s) for s in np.random.SeedSequence(seed).generate_state(2, dtype=np.uint64)
         )
+        gain = self._source.generate(self.num_slots, self.batch_size, channel_seed)
         # [B, num_slots, num_prbs], linear
-        self.sinr = self._source.generate(self.num_slots, self.batch_size, channel_seed)
+        self.sinr = 10.0 ** (self.snr_db / 10.0) * gain
         self._ack_rng = torch.Generator(device=DEVICE).manual_seed(ack_seed)
         self.slot = 0
 
     def current_sinr_grid(self) -> torch.Tensor:
-        """Per-RE SINR of the current slot, [B, num_data_symbols, num_subcarriers, 1, 1].
-
-        Each PRB value is repeated over its 12 subcarriers and all data symbols, so
-        Sionna counts exactly ``num_allocated_re`` resource elements.
-        """
-        per_subcarrier = self.sinr[:, self.slot].repeat_interleave(12, dim=1)
-        return per_subcarrier[:, None, :, None, None].expand(-1, self.num_data_symbols, -1, 1, 1)
+        """Per-RE SINR of the current slot, see :func:`sinr_grid`."""
+        return sinr_grid(self.sinr[:, self.slot], self.num_data_symbols)
 
     def step(self, mcs: torch.Tensor | int) -> LinkResult:
         """Transmit one slot with ``mcs`` (scalar or [B]) and advance to the next slot."""

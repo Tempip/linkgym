@@ -19,8 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   speed measurements; results in `docs/benchmarks.md`.
 - Tests for reproducibility, instance isolation, Sionna RNG side effects and equivalence with
   `PHYAbstraction`'s ACK and delivered bits.
+- Gymnasium environment `linkgym/LinkAdaptation-v0` (`LinkAdaptationEnv`), registered on
+  `import linkgym` and configured by `ScenarioConfig`: 26 MCS actions, delayed HARQ/SINR/MCS
+  reports as observation, normalized goodput reward, per-episode SNR draw.
+- `linkgym.baselines`: fixed MCS, ILLA, OLLA and oracle policies acting through the
+  environment, and an adapter for Stable-Baselines3 models.
+- `linkgym.evaluate` for goodput, observed TBLER and mean MCS across seeds.
+- `examples/run_baselines.py`, an environment speed section in `examples/benchmark.py`,
+  and `docs/environment.md`.
 
 ### Changed
 
+- `LinkSimulator.reset` takes an optional `snr_db`; the channel source now returns |h|^2 and
+  the simulator applies the SNR. M1 results are bitwise unchanged.
+- `LinkResult` has a new `ack_uniform` field with the uniform draw behind each ACK.
+- CI installs the `train` extra so the Stable-Baselines3 environment check runs.
 - Pinned ruff to 0.16.9 in the `dev` extra to match the pre-commit hook version.
 - Set the author name in `pyproject.toml` to Pedro Rodrigues.
