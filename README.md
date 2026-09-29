@@ -1,5 +1,8 @@
 # linkgym
 
+[![CI](https://github.com/Tempip/linkgym/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Tempip/linkgym/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Gymnasium environments for 5G NR link adaptation (MCS selection), built on NVIDIA Sionna SYS.
 
 **Status: pre-alpha, under construction.**
