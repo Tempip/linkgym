@@ -27,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `linkgym.evaluate` for goodput, observed TBLER and mean MCS across seeds.
 - `examples/run_baselines.py`, an environment speed section in `examples/benchmark.py`,
   and `docs/environment.md`.
+- `examples/train_ppo.py`: PPO training on `LinkAdaptation-v0` with `SubprocVecEnv`, seeds
+  disjoint from validation (500-509) and test (1000+) seeds, a validation callback for
+  learning curves, TensorBoard logs and a `run.json` with config, versions and git commit.
+- `examples/evaluate_all.py`: M3 evaluation protocol with selection on validation seeds,
+  held-out test seeds, paired bootstrap comparisons against OLLA and a fixed-SNR grid.
+- `evaluate` returns per-episode results; `linkgym.evaluation.paired_bootstrap` for paired
+  differences with a percentile bootstrap confidence interval.
+- `slow` pytest marker; CI runs `pytest -m "not slow"`.
 
 ### Changed
 
@@ -36,3 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI installs the `train` extra so the Stable-Baselines3 environment check runs.
 - Pinned ruff to 0.16.9 in the `dev` extra to match the pre-commit hook version.
 - Set the author name in `pyproject.toml` to Pedro Rodrigues.
+- `tensorboard` added to the `train` extra.
+- `.gitignore` ignores `runs/` and `results/` only at the repository root, so
+  `docs/results/` can be committed.
+
+### Fixed
+
+- `LinkAdaptationEnv` no longer raises on an unsupported `render_mode`; it warns, as
+  `gymnasium.make` does. Stable-Baselines3's `make_vec_env` passes
+  `render_mode="rgb_array"` by default.

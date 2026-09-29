@@ -72,7 +72,7 @@ class LinkAdaptationEnv(gymnasium.Env):
     See docs/environment.md for the timing diagram and the scenario fields.
 
     :param config: Scenario; defaults to ``ScenarioConfig()``
-    :param render_mode: `None` or ``"ansi"``
+    :param render_mode: `None` or ``"ansi"``; other modes only warn and render nothing
     :param kwargs: Overrides of ``config`` fields, e.g. ``speed=3.0``
     """
 
@@ -86,8 +86,12 @@ class LinkAdaptationEnv(gymnasium.Env):
         **kwargs: Any,
     ) -> None:
         self.config = dataclasses.replace(config or ScenarioConfig(), **kwargs)
+        # Unsupported modes only warn, as in gymnasium.make: SB3's make_vec_env passes
+        # render_mode="rgb_array" by default. render() then returns None.
         if render_mode is not None and render_mode not in self.metadata["render_modes"]:
-            raise ValueError(f"render_mode must be None or one of {self.metadata['render_modes']}")
+            gymnasium.logger.warn(
+                f"render_mode={render_mode!r} is not supported ({self.metadata['render_modes']})"
+            )
         self.render_mode = render_mode
 
         c = self.config

@@ -200,3 +200,8 @@ def test_render_ansi():
     assert "slot     0" in line and "MCS 14" in line and "running TBLER" in line
 
     assert LinkAdaptationEnv(episode_length=5).render() is None
+    # SB3's make_vec_env passes render_mode="rgb_array" by default: warn, do not fail
+    with pytest.warns(UserWarning, match="not supported"):
+        env = LinkAdaptationEnv(episode_length=5, render_mode="rgb_array")
+    env.reset(seed=0)
+    assert env.render() is None

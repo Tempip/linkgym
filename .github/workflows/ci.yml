@@ -34,4 +34,4 @@ jobs:
         run: ruff format --check .
 
       - name: Tests
-        run: pytest -q
+        run: pytest -q -m "not slow"

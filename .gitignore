@@ -26,9 +26,9 @@ htmlcov/
 # Environment variables
 .env
 
-# Training outputs and model checkpoints
-runs/
-results/
+# Training outputs and model checkpoints (root only; docs/results/ is committed)
+/runs/
+/results/
 *.zip
 
 # IDE and OS files
