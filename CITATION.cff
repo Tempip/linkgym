@@ -9,6 +9,7 @@ authors:
   - family-names: Rodrigues
     given-names: Pedro
 version: 0.1.0
+date-released: 2026-09-30
 repository-code: "https://github.com/Tempip/linkgym"
 url: "https://github.com/Tempip/linkgym"
 license: MIT

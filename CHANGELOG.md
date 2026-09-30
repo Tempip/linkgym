@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-30
+
 ### Added
 
 - Initial project skeleton: packaging, license, CI, pre-commit and an import test.
@@ -57,7 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pyproject.toml`: singular description, keywords, classifiers, Documentation and
   Changelog URLs for the PyPI page, an explicit sdist file list, and a `docs` extra
   (`nbclient`, `ipykernel`) for the notebook test.
-
 - `LinkSimulator.reset` takes an optional `snr_db`; the channel source now returns |h|^2 and
   the simulator applies the SNR. M1 results are bitwise unchanged.
 - `LinkResult` has a new `ack_uniform` field with the uniform draw behind each ACK.
@@ -77,3 +78,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LinkAdaptationEnv` no longer raises on an unsupported `render_mode`; it warns, as
   `gymnasium.make` does. Stable-Baselines3's `make_vec_env` passes
   `render_mode="rgb_array"` by default.
+
+[Unreleased]: https://github.com/Tempip/linkgym/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Tempip/linkgym/releases/tag/v0.1.0

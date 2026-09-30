@@ -3,7 +3,7 @@
 [![CI](https://github.com/Tempip/linkgym/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Tempip/linkgym/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Tempip/linkgym/blob/main/LICENSE)
 [![Python 3.11 | 3.12](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://github.com/Tempip/linkgym/blob/main/pyproject.toml)
-<!-- [![PyPI](https://img.shields.io/pypi/v/linkgym.svg)](https://pypi.org/project/linkgym/) -->
+[![PyPI](https://img.shields.io/pypi/v/linkgym.svg)](https://pypi.org/project/linkgym/)
 
 linkgym is a Gymnasium environment for 5G NR link adaptation (MCS selection) built on NVIDIA
 Sionna SYS, with classical baselines and a fixed evaluation protocol.
@@ -30,10 +30,11 @@ numbers: for a given seed, every policy faces the same channel and the same ACK 
 ## Installation
 
 ```bash
-pip install linkgym  # available after the first release
+pip install linkgym           # environment and baselines
+pip install "linkgym[train]"  # adds Stable-Baselines3 and TensorBoard for the PPO example
 ```
 
-From source, with the training extras (Stable-Baselines3, TensorBoard):
+From source, with the training extras:
 
 ```bash
 git clone https://github.com/Tempip/linkgym.git
@@ -67,8 +68,8 @@ result = linkgym.evaluate(
 print(result["goodput_mbps"]["mean"], result["observed_tbler"]["mean"])
 ```
 
-Train PPO with Stable-Baselines3 (a short run; the results below use 1M steps) and evaluate it
-the same way:
+Train PPO with Stable-Baselines3 and evaluate it the same way. This needs the `[train]` extra
+(`pip install "linkgym[train]"`); it is a short run, the results below use 1M steps:
 
 ```python
 import gymnasium as gym
