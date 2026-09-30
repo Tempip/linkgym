@@ -438,11 +438,25 @@ def plot_learning_curves(runs, gammas, val_olla, path: Path) -> None:
 
 def plot_scatter(test, path: Path) -> None:
     fig, ax = plt.subplots(figsize=(7, 5))
+    ppo_colors: dict[str, str] = {}
     for label, r in test.items():
         x, y = r["observed_tbler"]["mean"], r["goodput_mbps"]["mean"]
-        marker = "o" if label.startswith("ppo") else "s"
-        ax.scatter(x, y, marker=marker)
-        ax.annotate(label, (x, y), fontsize=7, xytext=(4, 3), textcoords="offset points")
+        if label.startswith("ppo"):
+            # One color and legend entry per gamma; the seeds of a gamma overlap
+            config = label.rsplit(" seed=", 1)[0]
+            first = config not in ppo_colors
+            ppo_colors.setdefault(config, f"C{len(ppo_colors)}")
+            ax.scatter(
+                x,
+                y,
+                marker="o",
+                color=ppo_colors[config],
+                label=f"{config} (seeds)" if first else None,
+            )
+        else:
+            ax.scatter(x, y, marker="s", color="gray")
+            ax.annotate(label, (x, y), fontsize=7, xytext=(4, 3), textcoords="offset points")
+    ax.legend(fontsize=8, loc="upper right")
     ax.set_xlabel("observed TBLER")
     ax.set_ylabel("goodput [Mbit/s]")
     ax.set_title("Test seeds, default scenario (mean over test seeds)")

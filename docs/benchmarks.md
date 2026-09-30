@@ -73,8 +73,10 @@ feedback delay 1, TDL-A with 100 ns delay spread at 3.5 GHz. Seeds 0-4, 2 episod
 seed; mean ± sample std (ddof=1) across seeds. All policies run through `env.step`; with
 the same seed they face the same SNR, channel and ACK draws.
 
-- `olla`, `illa`: Sionna OLLA and ILLA fed the report in `info["report"]`: the wideband
-  SINR (mean linear per-PRB SINR) and the ACK of the previous slot.
+- `olla`: Sionna OLLA fed the report in `info["report"]`: the wideband SINR (mean linear
+  per-PRB SINR) and the ACK of the previous slot.
+- `illa`: ILLA without outer loop, fed the raw wideband SINR report. It maps the reported
+  SINR to the highest MCS whose TBLER meets the target and never learns from ACK/NACK.
 - `oracle`: Sionna ILLA on the per-RE SINR of the slot being decided
   (`info["privileged"]`).
 
@@ -93,12 +95,20 @@ Observations:
 
 - OLLA reaches each target (0.053, 0.103, 0.202). Targets 0.05 and 0.1 give about the same
   goodput; 0.2 gives less.
-- ILLA on the wideband report has a TBLER of 0.55. The wideband mean SINR is higher than the
-  EESM effective SINR that decides the ACK, and ILLA has no correction for it or for the
-  one-slot-old report at 15 m/s.
+- ILLA without outer loop has a TBLER of 0.55 at a target of 0.1. This is the bias OLLA
+  exists to correct: the wideband mean SINR of the report is higher than the EESM effective
+  SINR that decides the ACK, and at 15 m/s the one-slot-old report is stale. OLLA runs the
+  same ILLA rule but shifts the reported SINR by an offset learned from the ACK/NACK
+  feedback, which brings its TBLER to the target.
 - The goodput std across seeds is large (about 10 Mbit/s for OLLA) because the mean SNR is
   drawn per episode and each seed has only 2 episodes.
 - The oracle's goodput is 8.6 Mbit/s above the best OLLA mean.
+
+## PPO (M3)
+
+PPO results, protocol and limitations are in [results/m3/README.md](results/m3/README.md).
+On held-out test seeds, PPO with gamma = 0 has +5.47 Mbit/s (+18.0%, 95% CI [+16.8%,
++19.4%]) more goodput per episode than OLLA 0.1, with both selected on validation seeds.
 
 ## Simulator link adaptation baselines (M1)
 

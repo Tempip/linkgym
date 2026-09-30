@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `evaluate` returns per-episode results; `linkgym.evaluation.paired_bootstrap` for paired
   differences with a percentile bootstrap confidence interval.
 - `slow` pytest marker; CI runs `pytest -m "not slow"`.
+- `docs/results/m3/`: M3 PPO results (gamma 0 and 0.9, 3 training seeds each) against OLLA,
+  ILLA, fixed MCS and the oracle, with tables, figures, interpretation and limitations.
 
 ### Changed
 
@@ -47,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tensorboard` added to the `train` extra.
 - `.gitignore` ignores `runs/` and `results/` only at the repository root, so
   `docs/results/` can be committed.
+- `docs/benchmarks.md` describes ILLA as ILLA without outer loop, fed the raw wideband SINR
+  report, whose high TBLER is the bias OLLA corrects.
+- `examples/evaluate_all.py` colors the PPO models by gamma in the goodput-vs-TBLER figure
+  instead of labeling each point.
 
 ### Fixed
 
