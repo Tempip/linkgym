@@ -70,6 +70,13 @@ def test_olla_tracks_its_target(phy):
     assert result["observed_tbler"]["mean"] == pytest.approx(0.1, abs=0.01)
 
 
+def test_olla_delta_up_reaches_sionna(phy):
+    policy = OLLAPolicy(0.2, delta_up=0.25, phy_abstraction=phy)
+    assert policy._olla.delta_up == 0.25
+    assert policy._olla.delta_down == pytest.approx(0.25 * 0.2 / 0.8)
+    assert OLLAPolicy(0.1, phy_abstraction=phy)._olla.delta_up == 1.0
+
+
 def test_evaluate_accepts_any_object_with_act():
     class Constant:
         def act(self, obs, info):

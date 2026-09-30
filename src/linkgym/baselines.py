@@ -84,16 +84,26 @@ class ILLAPolicy:
 
 class OLLAPolicy:
     """Sionna OLLA fed the latest report: its ACK as HARQ feedback and its wideband SINR
-    as effective SINR. Until the first report arrives the feedback is marked missing."""
+    as effective SINR. Until the first report arrives the feedback is marked missing.
+
+    :param bler_target: TBLER target
+    :param delta_up: Offset increase [dB] after a NACK; the decrease after an ACK is
+        ``delta_up * bler_target / (1 - bler_target)``. Defaults to Sionna's 1.0.
+    """
 
     def __init__(
-        self, bler_target: float = 0.1, *, phy_abstraction: PHYAbstraction | None = None
+        self,
+        bler_target: float = 0.1,
+        *,
+        delta_up: float = 1.0,
+        phy_abstraction: PHYAbstraction | None = None,
     ) -> None:
         if phy_abstraction is None:
             phy_abstraction = PHYAbstraction(device=DEVICE)
         self.bler_target = bler_target
+        self.delta_up = delta_up
         self._olla = OuterLoopLinkAdaptation(
-            phy_abstraction, num_ut=1, bler_target=bler_target, device=DEVICE
+            phy_abstraction, num_ut=1, bler_target=bler_target, delta_up=delta_up, device=DEVICE
         )
 
     def reset(self) -> None:

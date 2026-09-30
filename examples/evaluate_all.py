@@ -3,15 +3,19 @@
 Protocol (docs/results/m3/README.md):
 
 - Selection uses validation seeds only (500-509, 1 episode each): the PPO gamma by the
-  final validation goodput in each run's eval_log.csv (mean over training seeds), the
-  OLLA target by the mean validation goodput of OLLA 0.05, 0.1 and 0.2.
+  final validation goodput in each run's eval_log.csv (mean over training seeds). OLLA
+  is evaluated on the grid of TBLER targets {0.05, 0.1, 0.2} x delta_up {0.1, 0.25, 0.5,
+  1.0} dB: the best cell by mean validation goodput is the tuned OLLA, and the best target
+  with Sionna's default delta_up = 1.0 is the default OLLA.
 - Test: held-out seeds 1000-1009, 5 episodes each, default scenario. PPO models
-  (deterministic), OLLA 0.05/0.1/0.2, ILLA 0.1, fixed MCS 14, oracle 0.1.
-- Paired comparison of each PPO model, and of each gamma averaged over its training
-  seeds, against each OLLA target: per-episode differences on the same seed and episode,
-  mean with a 95% percentile bootstrap CI.
+  (deterministic), OLLA 0.05/0.1/0.2 (default step), tuned OLLA, ILLA 0.1, fixed MCS 14,
+  oracle 0.1.
+- Paired comparison: the PPO models of the selected gamma, and their mean, against the
+  tuned OLLA; each PPO model, and each gamma averaged over its training seeds, against
+  each default OLLA target. Per-episode differences on the same seed and episode, mean
+  with a 95% percentile bootstrap CI.
 - Fixed-SNR grid (5, 10, 15, 20 dB) on the test seeds: the PPO models of the selected
-  gamma, the three OLLA targets and the oracle.
+  gamma, the default OLLA targets, the tuned OLLA and the oracle.
 
 Per-episode and summary CSVs go to results/m3/ (not committed); compact tables and
 figures to docs/results/m3/.
@@ -43,6 +47,8 @@ from linkgym.evaluation import paired_bootstrap  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 OLLA_TARGETS = (0.05, 0.1, 0.2)
+OLLA_DELTA_UPS = (0.1, 0.25, 0.5, 1.0)
+DEFAULT_DELTA_UP = 1.0  # Sionna's default
 METRICS = ("goodput_mbps", "observed_tbler", "mean_mcs")
 
 
@@ -52,7 +58,7 @@ class Job:
     scenario: str  # "default" or "snr<dB>"
     label: str
     kind: str  # ppo, olla, illa, fixed or oracle
-    param: Any  # model path, TBLER target or MCS
+    param: Any  # model path, (TBLER target, delta_up), TBLER target or MCS
     env_kwargs: tuple[tuple[str, Any], ...]
     seeds: tuple[int, ...]
     episodes: int
@@ -67,7 +73,10 @@ def build_policy(kind: str, param: Any) -> Any:
         return SB3Policy(PPO.load(param, device="cpu"))
     from linkgym.baselines import FixedMCSPolicy, ILLAPolicy, OLLAPolicy, OraclePolicy
 
-    classes = {"olla": OLLAPolicy, "illa": ILLAPolicy, "oracle": OraclePolicy}
+    if kind == "olla":
+        target, delta_up = param
+        return OLLAPolicy(target, delta_up=delta_up)
+    classes = {"illa": ILLAPolicy, "oracle": OraclePolicy}
     return classes.get(kind, FixedMCSPolicy)(param)
 
 
@@ -77,6 +86,25 @@ def run_job(job: Job) -> tuple[Job, dict[str, Any], float]:
     policy = build_policy(job.kind, job.param)
     result = evaluate(policy, dict(job.env_kwargs), job.seeds, job.episodes)
     return job, result, time.perf_counter() - start
+
+
+def run_jobs(jobs: list[Job], workers: int) -> tuple[dict, dict]:
+    """Run jobs in spawned workers; results and seconds keyed by (split, scenario, label)."""
+    # Slowest policies first for better load balancing
+    order = {"oracle": 0, "olla": 1, "illa": 1, "ppo": 2, "fixed": 3}
+    jobs = sorted(jobs, key=lambda j: order[j.kind])
+    results, seconds = {}, {}
+    context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=workers, mp_context=context) as pool:
+        for job, result, job_seconds in pool.map(run_job, jobs):
+            key = (job.split, job.scenario, job.label)
+            results[key], seconds[key] = result, job_seconds
+    return results, seconds
+
+
+def olla_label(target: float, delta_up: float) -> str:
+    suffix = "" if delta_up == DEFAULT_DELTA_UP else f" delta_up={delta_up:g}"
+    return f"olla {target:g}{suffix}"
 
 
 def read_csv(path: Path) -> list[dict[str, float]]:
@@ -186,15 +214,32 @@ def main() -> None:
             episodes or args.test_episodes,
         )
 
+    # Phase 1, validation seeds: OLLA grid of TBLER target x delta_up
+    olla_grid = [(t, d) for t in OLLA_TARGETS for d in OLLA_DELTA_UPS]
     jobs = [
-        job("validation", "default", f"olla {t:g}", "olla", t, seeds=val_seeds, episodes=1)
-        for t in OLLA_TARGETS
+        job("validation", "default", olla_label(*td), "olla", td, seeds=val_seeds, episodes=1)
+        for td in olla_grid
     ]
+    print(f"{len(runs)} runs, gammas {gammas}; {args.workers} workers")
+    start = time.perf_counter()
+    results, seconds = run_jobs(jobs, args.workers)
+    print(f"validation: {len(jobs)} jobs in {time.perf_counter() - start:.0f} s")
+
+    val_grid = {td: results[("validation", "default", olla_label(*td))] for td in olla_grid}
+    tuned = max(olla_grid, key=lambda td: val_grid[td]["goodput_mbps"]["mean"])
+    tuned_label = f"olla tuned ({tuned[0]:g}, delta_up={tuned[1]:g})"
+    val_olla = {t: val_grid[(t, DEFAULT_DELTA_UP)] for t in OLLA_TARGETS}
+    best_target = max(OLLA_TARGETS, key=lambda t: val_olla[t]["goodput_mbps"]["mean"])
+
+    # Phase 2, test seeds
     test_policies = [(ppo_label(r["gamma"], r["seed"]), "ppo", r["model"]) for r in runs]
-    test_policies += [(f"olla {t:g}", "olla", t) for t in OLLA_TARGETS]
+    test_policies += [
+        (olla_label(t, DEFAULT_DELTA_UP), "olla", (t, DEFAULT_DELTA_UP)) for t in OLLA_TARGETS
+    ]
+    test_policies += [(tuned_label, "olla", tuned)]
     test_policies += [("illa 0.1", "illa", 0.1), ("fixed 14", "fixed", 14)]
     test_policies += [("oracle 0.1", "oracle", 0.1)]
-    jobs += [job("test", "default", *p) for p in test_policies]
+    test_jobs = [job("test", "default", *p) for p in test_policies]
     grid_policies = [p for p in test_policies if p[1] in ("olla", "oracle")]
     grid_policies += [
         (ppo_label(r["gamma"], r["seed"]), "ppo", r["model"])
@@ -202,24 +247,13 @@ def main() -> None:
         if r["gamma"] == best_gamma
     ]
     for snr in args.snr_grid:
-        jobs += [job("test", f"snr{snr:g}", *p, extra={"snr_db": snr}) for p in grid_policies]
-    # Slowest policies first for better load balancing
-    order = {"oracle": 0, "olla": 1, "illa": 1, "ppo": 2, "fixed": 3}
-    jobs.sort(key=lambda j: (j.split != "test", order[j.kind]))
-
-    print(
-        f"{len(runs)} runs, gammas {gammas}; {len(jobs)} evaluation jobs on {args.workers} workers"
-    )
+        test_jobs += [job("test", f"snr{snr:g}", *p, extra={"snr_db": snr}) for p in grid_policies]
     start = time.perf_counter()
-    results: dict[tuple[str, str, str], dict[str, Any]] = {}
-    seconds: dict[tuple[str, str, str], float] = {}
-    context = multiprocessing.get_context("spawn")
-    with ProcessPoolExecutor(max_workers=args.workers, mp_context=context) as pool:
-        for done_job, result, job_seconds in pool.map(run_job, jobs):
-            key = (done_job.split, done_job.scenario, done_job.label)
-            results[key], seconds[key] = result, job_seconds
-    elapsed = time.perf_counter() - start
-    print(f"evaluation done in {elapsed:.0f} s\n")
+    test_results, test_seconds = run_jobs(test_jobs, args.workers)
+    results |= test_results
+    seconds |= test_seconds
+    jobs += test_jobs
+    print(f"test: {len(test_jobs)} jobs in {time.perf_counter() - start:.0f} s\n")
     job_by_key = {(j.split, j.scenario, j.label): j for j in jobs}
 
     # Common random numbers: every policy of a split/scenario saw the same episodes
@@ -230,10 +264,6 @@ def main() -> None:
             if (s, sc) == (split, scenario)
         ]
         assert all(e == episodes[0] for e in episodes), f"episodes differ in {split}/{scenario}"
-
-    # OLLA target selection on validation seeds
-    val_olla = {t: results[("validation", "default", f"olla {t:g}")] for t in OLLA_TARGETS}
-    best_target = max(OLLA_TARGETS, key=lambda t: val_olla[t]["goodput_mbps"]["mean"])
 
     # --- Raw CSVs (results/, not committed) ---
     per_episode_rows, summary_rows = [], []
@@ -279,6 +309,19 @@ def main() -> None:
         for t in OLLA_TARGETS
     ]
     write_csv(args.docs_dir / "validation.csv", validation_rows)
+    tuning_rows = [
+        {
+            "bler_target": t,
+            "delta_up_db": d,
+            "goodput_mbps_mean": val_grid[(t, d)]["goodput_mbps"]["mean"],
+            "goodput_mbps_std": val_grid[(t, d)]["goodput_mbps"]["std"],
+            "observed_tbler_mean": val_grid[(t, d)]["observed_tbler"]["mean"],
+            "mean_mcs_mean": val_grid[(t, d)]["mean_mcs"]["mean"],
+            "selected": (t, d) == tuned,
+        }
+        for t, d in olla_grid
+    ]
+    write_csv(args.docs_dir / "olla_tuning.csv", tuning_rows)
 
     # --- Test summary, default scenario ---
     test = {label: results[("test", "default", label)] for label, _, _ in test_policies}
@@ -300,39 +343,39 @@ def main() -> None:
         ],
     )
 
-    # --- Paired comparisons vs every OLLA target ---
-    def paired_row(label: str, goodput: np.ndarray, tbler: np.ndarray, target: float) -> dict:
-        olla = test[f"olla {target:g}"]
+    # --- Paired comparisons vs the tuned OLLA and every default OLLA target ---
+    def paired_row(label: str, goodput: np.ndarray, tbler: np.ndarray, vs: str) -> dict:
+        olla = test[vs]
         boot = {"num_resamples": args.bootstrap_resamples, "seed": args.bootstrap_seed}
         g = paired_bootstrap(goodput, episode_metric(olla, "goodput_mbps"), **boot)
         t = paired_bootstrap(tbler, episode_metric(olla, "observed_tbler"), **boot)
         return {
             "policy": label,
-            "vs": f"olla {target:g}",
-            "vs_selected_on_validation": target == best_target,
+            "vs": vs,
+            "vs_selected_on_validation": vs in (tuned_label, olla_label(best_target, 1.0)),
             "episodes": len(goodput),
             **{f"goodput_diff_{k}": v for k, v in g.items()},
             **{f"tbler_diff_{k}": t[k] for k in ("mean", "ci_low", "ci_high")},
         }
 
-    paired = []
-    for g in gammas:
+    def gamma_mean(g: float) -> tuple[str, np.ndarray, np.ndarray]:
         models = [test[ppo_label(r["gamma"], r["seed"])] for r in runs if r["gamma"] == g]
         goodput = np.mean([episode_metric(m, "goodput_mbps") for m in models], axis=0)
         tbler = np.mean([episode_metric(m, "observed_tbler") for m in models], axis=0)
-        label = ppo_label(g) + f" (mean of {n_seeds(len(models))})"
-        paired += [paired_row(label, goodput, tbler, t) for t in OLLA_TARGETS]
-    for r in runs:
+        return ppo_label(g) + f" (mean of {n_seeds(len(models))})", goodput, tbler
+
+    def model(r: dict) -> tuple[str, np.ndarray, np.ndarray]:
         m = test[ppo_label(r["gamma"], r["seed"])]
-        paired += [
-            paired_row(
-                ppo_label(r["gamma"], r["seed"]),
-                episode_metric(m, "goodput_mbps"),
-                episode_metric(m, "observed_tbler"),
-                t,
-            )
-            for t in OLLA_TARGETS
-        ]
+        label = ppo_label(r["gamma"], r["seed"])
+        return label, episode_metric(m, "goodput_mbps"), episode_metric(m, "observed_tbler")
+
+    default_labels = [olla_label(t, DEFAULT_DELTA_UP) for t in OLLA_TARGETS]
+    paired = [paired_row(*gamma_mean(best_gamma), tuned_label)]
+    paired += [paired_row(*model(r), tuned_label) for r in runs if r["gamma"] == best_gamma]
+    for g in gammas:
+        paired += [paired_row(*gamma_mean(g), vs) for vs in default_labels]
+    for r in runs:
+        paired += [paired_row(*model(r), vs) for vs in default_labels]
     write_csv(args.docs_dir / "paired.csv", paired)
 
     # --- Fixed-SNR grid ---
@@ -370,6 +413,19 @@ def main() -> None:
             f"{row['observed_tbler_mean']:.4f} | {'yes' if row['selected'] else ''} |"
         )
     print(
+        f"\nOLLA tuning grid (validation seeds {val_seeds[0]}-{val_seeds[-1]}, 1 episode "
+        f"each; mean ± std across validation seeds)\n"
+    )
+    print("| TBLER target | delta_up dB | goodput Mbit/s | observed TBLER | mean MCS | selected |")
+    print("|---:|---:|---:|---:|---:|:---:|")
+    for row in tuning_rows:
+        print(
+            f"| {row['bler_target']:g} | {row['delta_up_db']:g} | "
+            f"{row['goodput_mbps_mean']:.2f} ± {row['goodput_mbps_std']:.2f} | "
+            f"{row['observed_tbler_mean']:.4f} | {row['mean_mcs_mean']:.2f} | "
+            f"{'yes' if row['selected'] else ''} |"
+        )
+    print(
         f"\nTest, default scenario (seeds {args.test_seeds[0]}-{args.test_seeds[-1]}, "
         f"{args.test_episodes} episodes each; PPO config rows: mean ± std across training "
         f"seeds, other rows: across test seeds)\n"
@@ -403,7 +459,9 @@ def main() -> None:
 
     plot_learning_curves(runs, gammas, val_olla, args.docs_dir / "learning_curves.png")
     plot_scatter(test, args.docs_dir / "goodput_vs_tbler.png")
-    plot_snr(results, runs, best_gamma, args.snr_grid, args.docs_dir / "goodput_vs_snr.png")
+    plot_snr(
+        results, runs, best_gamma, tuned_label, args.snr_grid, args.docs_dir / "goodput_vs_snr.png"
+    )
     print(f"\nwrote {args.results_dir} and {args.docs_dir}")
 
 
@@ -466,7 +524,7 @@ def plot_scatter(test, path: Path) -> None:
     plt.close(fig)
 
 
-def plot_snr(results, runs, best_gamma, snr_grid, path: Path) -> None:
+def plot_snr(results, runs, best_gamma, tuned_label, snr_grid, path: Path) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
     snrs = np.array(snr_grid)
     models = [ppo_label(r["gamma"], r["seed"]) for r in runs if r["gamma"] == best_gamma]
@@ -481,9 +539,11 @@ def plot_snr(results, runs, best_gamma, snr_grid, path: Path) -> None:
         )
         ax.plot(snrs, values.mean(axis=0), marker="o", label=f"PPO gamma={best_gamma:g} (mean)")
         ax.fill_between(snrs, values.min(axis=0), values.max(axis=0), alpha=0.25)
-        for label in [f"olla {t:g}" for t in OLLA_TARGETS] + ["oracle 0.1"]:
+        for label in [olla_label(t, DEFAULT_DELTA_UP) for t in OLLA_TARGETS] + ["oracle 0.1"]:
             ys = [results[("test", f"snr{s:g}", label)][metric]["mean"] for s in snr_grid]
             ax.plot(snrs, ys, marker="s", linestyle="--", label=label)
+        ys = [results[("test", f"snr{s:g}", tuned_label)][metric]["mean"] for s in snr_grid]
+        ax.plot(snrs, ys, marker="D", color="black", label=tuned_label)
         ax.set_xlabel("mean SNR [dB]")
         ax.set_ylabel(ylabel)
         ax.grid(alpha=0.3)

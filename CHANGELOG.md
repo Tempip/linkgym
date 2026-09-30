@@ -37,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `slow` pytest marker; CI runs `pytest -m "not slow"`.
 - `docs/results/m3/`: M3 PPO results (gamma 0 and 0.9, 3 training seeds each) against OLLA,
   ILLA, fixed MCS and the oracle, with tables, figures, interpretation and limitations.
+- `OLLAPolicy` takes a `delta_up` argument [dB], passed to Sionna's
+  `OuterLoopLinkAdaptation` (default 1.0, Sionna's).
+- Tuned OLLA baseline in `examples/evaluate_all.py`: TBLER target x `delta_up` grid on the
+  validation seeds, the best cell evaluated on the test seeds, in the fixed-SNR grid and in
+  the paired comparison with PPO. The M3 headline is now PPO vs tuned OLLA
+  (`docs/results/m3/olla_tuning.csv`).
 
 ### Changed
 

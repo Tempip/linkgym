@@ -107,8 +107,9 @@ Observations:
 ## PPO (M3)
 
 PPO results, protocol and limitations are in [results/m3/README.md](results/m3/README.md).
-On held-out test seeds, PPO with gamma = 0 has +5.47 Mbit/s (+18.0%, 95% CI [+16.8%,
-+19.4%]) more goodput per episode than OLLA 0.1, with both selected on validation seeds.
+On held-out test seeds, PPO with gamma = 0 has +4.93 Mbit/s (+16.0%, 95% CI [+14.9%,
++17.1%]) more goodput per episode than OLLA tuned over TBLER target x step size (target
+0.1, `delta_up` 0.25 dB), with both selected on validation seeds.
 
 ## Simulator link adaptation baselines (M1)
 
