@@ -43,8 +43,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   validation seeds, the best cell evaluated on the test seeds, in the fixed-SNR grid and in
   the paired comparison with PPO. The M3 headline is now PPO vs tuned OLLA
   (`docs/results/m3/olla_tuning.csv`).
+- `examples/quickstart.ipynb`: environment, rendering, an OLLA episode trace and an
+  evaluation of OLLA against a random policy.
+- `CONTRIBUTING.md` and `CITATION.cff`.
+- `docs/assets/header.png` (README figure) and `docs/assets/social_preview.png`
+  (1280 x 640), built from the M3 results by `docs/assets/make_assets.py`.
+- Tests that run the README code blocks verbatim and, marked slow, the quickstart notebook.
 
 ### Changed
+
+- README rewritten: header figure, motivation, installation, quickstart, results, environment
+  summary, reproduction commands with measured times, limitations, related work, citation.
+- `pyproject.toml`: singular description, keywords, classifiers, Documentation and
+  Changelog URLs for the PyPI page, an explicit sdist file list, and a `docs` extra
+  (`nbclient`, `ipykernel`) for the notebook test.
 
 - `LinkSimulator.reset` takes an optional `snr_db`; the channel source now returns |h|^2 and
   the simulator applies the SNR. M1 results are bitwise unchanged.

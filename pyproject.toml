@@ -5,12 +5,35 @@ build-backend = "hatchling.build"
 [project]
 name = "linkgym"
 version = "0.0.1"
-description = "Gymnasium environments for 5G NR link adaptation (MCS selection) built on NVIDIA Sionna SYS."
+description = "A Gymnasium environment for 5G NR link adaptation (MCS selection) built on NVIDIA Sionna SYS, with classical baselines and a fixed evaluation protocol."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Pedro Rodrigues" }]
 requires-python = ">=3.11"
+keywords = [
+    "5G",
+    "NR",
+    "link adaptation",
+    "MCS selection",
+    "reinforcement learning",
+    "gymnasium",
+    "sionna",
+    "wireless communications",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Telecommunications Industry",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "sionna-no-rt>=2.1,<2.2",
     "gymnasium>=1.0,<2",
@@ -20,14 +43,31 @@ dependencies = [
 [project.optional-dependencies]
 train = ["stable-baselines3>=2.3,<3", "tensorboard"]
 dev = ["pytest", "ruff==0.16.9", "pre-commit"]
+docs = ["nbclient", "ipykernel"]
 
 [project.urls]
 Homepage = "https://github.com/Tempip/linkgym"
 Repository = "https://github.com/Tempip/linkgym"
+Documentation = "https://github.com/Tempip/linkgym/tree/main/docs"
+Changelog = "https://github.com/Tempip/linkgym/blob/main/CHANGELOG.md"
 Issues = "https://github.com/Tempip/linkgym/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/linkgym"]
+
+# Explicit list: only these paths go into the sdist, never local files
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/examples",
+    "/docs",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+    "/CITATION.cff",
+    "/CONTRIBUTING.md",
+]
 
 [tool.ruff]
 line-length = 100

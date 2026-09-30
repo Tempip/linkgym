@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use linkgym, please cite it as below."
+title: "linkgym: A Gymnasium environment for 5G NR link adaptation"
+abstract: >-
+  linkgym is a Gymnasium environment for 5G NR link adaptation (MCS selection) built on
+  NVIDIA Sionna SYS, with classical baselines and a fixed evaluation protocol.
+type: software
+authors:
+  - family-names: Rodrigues
+    given-names: Pedro
+version: 0.1.0
+repository-code: "https://github.com/Tempip/linkgym"
+url: "https://github.com/Tempip/linkgym"
+license: MIT
+keywords:
+  - 5G NR
+  - link adaptation
+  - MCS selection
+  - reinforcement learning
+  - Gymnasium
+  - Sionna
