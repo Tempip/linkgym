@@ -53,8 +53,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `evaluate_episodes` and `cluster_bootstrap` for enumerated evaluation.
 - `examples/train_ppo.py --channel trace`: training on the train split of a trace with
   validation on pinned val episodes; the run records the dataset's SHA-256.
-- The v0.2 Munich experiment: protocol (`docs/results/v02/PROTOCOL.md`) and
-  `examples/evaluate_v02.py`.
+- The v0.2 Munich experiment: protocol (`docs/results/v02/PROTOCOL.md`),
+  `examples/evaluate_v02.py` and the results (`docs/results/v02/README.md`): PPO trained on
+  the Munich train streets against tuned OLLA, PPO trained on TDL and the other baselines on
+  the held-out test streets, per route category and on both ray-tracing realizations.
 
 ### Changed
 
