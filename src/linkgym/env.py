@@ -231,6 +231,10 @@ class LinkAdaptationEnv(gymnasium.Env):
             f"running TBLER {running_tbler:.3f}"
         )
 
+    def close(self) -> None:
+        """Release the channel source's resources, e.g. close the trace file."""
+        self._sim.close()
+
     def _episode_snr_db(self) -> float:
         """Mean SNR of the episode [dB] reported in the info."""
         if self.config.snr_mode == "link_budget":

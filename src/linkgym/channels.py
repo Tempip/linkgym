@@ -22,6 +22,7 @@ TRACE_FORMAT = "linkgym-trace"
 TRACE_FORMAT_VERSION = 1
 GAIN_UNIT = "linear_power_gain"
 PRB_SAMPLINGS = ("center", "mean12")
+CATEGORIES = ("los", "nlos", "transition")
 BOLTZMANN = 1.380649e-23  # J/K
 REFERENCE_TEMPERATURE = 290.0  # K
 
@@ -58,7 +59,9 @@ class ChannelSource(Protocol):
 
     The simulator computes ``sinr = 10 ** (snr_db / 10) * gain``, where ``snr_db`` is
     ``reference_snr_db`` if the episode sets it and the scenario SNR otherwise. Pass a
-    source to :class:`linkgym.sim.LinkSimulator` with ``channel_source=...``.
+    source to :class:`linkgym.sim.LinkSimulator` with ``channel_source=...``. A source may
+    also have a ``close()`` method releasing its resources; the simulator calls it in
+    :meth:`~linkgym.sim.LinkSimulator.close`.
     """
 
     num_prbs: int
@@ -71,8 +74,36 @@ class TraceFormatError(ValueError):
 
 
 @dataclass(frozen=True)
+class TraceInfo:
+    """Validated header and statistics of a trace file (format version 1), without the gains.
+
+    :param mean_gain: [T] float64 mean gain of each trajectory over all its slots and PRBs
+    """
+
+    path: str
+    shape: tuple[int, int, int]  # [T, N, num_prb] of the gain dataset
+    split: np.ndarray  # str [T]
+    group: np.ndarray | None  # int [T]
+    category: np.ndarray | None  # str [T]
+    attrs: dict[str, Any]
+    mean_gain: np.ndarray
+
+    @property
+    def num_trajectories(self) -> int:
+        return self.shape[0]
+
+    @property
+    def num_slots(self) -> int:
+        return self.shape[1]
+
+    @property
+    def num_prbs(self) -> int:
+        return self.shape[2]
+
+
+@dataclass(frozen=True)
 class TraceData:
-    """Validated contents of a trace file (format version 1)."""
+    """Validated contents of a trace file (format version 1), gains included."""
 
     path: str
     gain: np.ndarray  # float32 [T, N, num_prb]
@@ -119,17 +150,26 @@ def write_trace(
     prb_sampling: str = "center",
     group: np.ndarray | None = None,
     rx_position: np.ndarray | None = None,
-    rx_velocity: np.ndarray | None = None,
     num_paths: np.ndarray | None = None,
+    los: np.ndarray | None = None,
+    category: list[str] | np.ndarray | None = None,
     attrs: dict[str, Any] | None = None,
 ) -> None:
     """Write a trace file (format version 1); the result is validated by reading it back.
+
+    ``gain`` is stored contiguous and uncompressed, so that a window of slots of one
+    trajectory is a single contiguous read.
 
     :param gain: [T, N, num_prb] linear power gain |h|^2 per trajectory, slot and PRB
     :param split: [T] split label per trajectory, e.g. "train", "val", "test"
     :param prb_sampling: "center" (one frequency point per PRB) or "mean12" (mean over the
         12 subcarriers of the PRB)
-    :param attrs: Optional extra root attributes (str, int, float), e.g. scene or versions
+    :param group: [T] group of each trajectory, e.g. the route it was cut from
+    :param rx_position: [T, N, 3] receiver position [m]
+    :param num_paths: [T, A] number of propagation paths at A points of each trajectory
+    :param los: [T, A] 1 if a line-of-sight path exists at these points, else 0
+    :param category: [T] route category of each trajectory: "los", "nlos" or "transition"
+    :param attrs: Optional extra root attributes (str, int, float or arrays of them)
     """
     import h5py
 
@@ -147,102 +187,146 @@ def write_trace(
             f.attrs[key] = value
         f.create_dataset("gain", data=gain)
         f.create_dataset("split", data=np.asarray(split, dtype=object), dtype=h5py.string_dtype())
+        if category is not None:
+            data = np.asarray(category, dtype=object)
+            f.create_dataset("category", data=data, dtype=h5py.string_dtype())
         optional = {
             "group": (group, np.int32),
             "rx_position": (rx_position, np.float32),
-            "rx_velocity": (rx_velocity, np.float32),
             "num_paths": (num_paths, np.int16),
+            "los": (los, np.int8),
         }
         for name, (data, dtype) in optional.items():
             if data is not None:
                 f.create_dataset(name, data=np.asarray(data, dtype=dtype))
-    read_trace(path)
+    inspect_trace(path)
+
+
+def inspect_trace(path: str | os.PathLike) -> TraceInfo:
+    """Validate a trace file without loading all its gains into memory.
+
+    The gains are read one trajectory at a time to check their values and to compute the
+    mean gain of each trajectory. Raise :class:`TraceFormatError` on any problem.
+    """
+    path = os.fspath(path)
+    with _open_trace(path) as f:
+        return _validate(f, path)
 
 
 def read_trace(path: str | os.PathLike) -> TraceData:
-    """Read and validate a trace file; raise :class:`TraceFormatError` on any problem."""
+    """Read and validate a trace file, gains included; raise :class:`TraceFormatError`."""
+    path = os.fspath(path)
+    with _open_trace(path) as f:
+        info = _validate(f, path)
+        gain = f["gain"][()]
+    return TraceData(path=path, gain=gain, split=info.split, group=info.group, attrs=info.attrs)
+
+
+def _open_trace(path: str):
+    """Open a trace file read-only."""
     import h5py
 
-    path = os.fspath(path)
+    try:
+        return h5py.File(path, "r")
+    except OSError as e:
+        raise TraceFormatError(f"{path}: cannot open as HDF5 ({e})") from e
+
+
+def _validate(f, path: str) -> TraceInfo:
+    """Check an open trace file; the gains are streamed one trajectory at a time."""
 
     def fail(message: str) -> TraceFormatError:
         return TraceFormatError(f"{path}: {message}")
 
-    try:
-        f = h5py.File(path, "r")
-    except OSError as e:
-        raise fail(f"cannot open as HDF5 ({e})") from e
-    with f:
-        attrs = {key: _plain(value) for key, value in f.attrs.items()}
-        if attrs.get("format") != TRACE_FORMAT:
-            raise fail(f"attribute 'format' must be {TRACE_FORMAT!r}, got {attrs.get('format')!r}")
-        if attrs.get("format_version") != TRACE_FORMAT_VERSION:
-            raise fail(
-                f"unsupported format_version {attrs.get('format_version')!r}; "
-                f"this linkgym reads version {TRACE_FORMAT_VERSION}"
-            )
-        required = (
-            "gain_unit",
-            "carrier_frequency_hz",
-            "subcarrier_spacing_hz",
-            "slot_duration_s",
-            "num_prb",
-            "prb_sampling",
+    attrs = {key: _plain(value) for key, value in f.attrs.items()}
+    if attrs.get("format") != TRACE_FORMAT:
+        raise fail(f"attribute 'format' must be {TRACE_FORMAT!r}, got {attrs.get('format')!r}")
+    if attrs.get("format_version") != TRACE_FORMAT_VERSION:
+        raise fail(
+            f"unsupported format_version {attrs.get('format_version')!r}; "
+            f"this linkgym reads version {TRACE_FORMAT_VERSION}"
         )
-        missing = [key for key in required if key not in attrs]
-        if missing:
-            raise fail(f"missing attributes {missing}")
-        if attrs["gain_unit"] != GAIN_UNIT:
-            raise fail(f"attribute 'gain_unit' must be {GAIN_UNIT!r}, got {attrs['gain_unit']!r}")
-        if attrs["prb_sampling"] not in PRB_SAMPLINGS:
-            raise fail(f"attribute 'prb_sampling' must be one of {PRB_SAMPLINGS}")
-        for key in ("carrier_frequency_hz", "subcarrier_spacing_hz", "slot_duration_s"):
-            value = attrs[key]
-            if not isinstance(value, float | int) or not math.isfinite(value) or value <= 0:
-                raise fail(f"attribute {key!r} must be a positive number, got {value!r}")
+    required = (
+        "gain_unit",
+        "carrier_frequency_hz",
+        "subcarrier_spacing_hz",
+        "slot_duration_s",
+        "num_prb",
+        "prb_sampling",
+    )
+    missing = [key for key in required if key not in attrs]
+    if missing:
+        raise fail(f"missing attributes {missing}")
+    if attrs["gain_unit"] != GAIN_UNIT:
+        raise fail(f"attribute 'gain_unit' must be {GAIN_UNIT!r}, got {attrs['gain_unit']!r}")
+    if attrs["prb_sampling"] not in PRB_SAMPLINGS:
+        raise fail(f"attribute 'prb_sampling' must be one of {PRB_SAMPLINGS}")
+    for key in ("carrier_frequency_hz", "subcarrier_spacing_hz", "slot_duration_s"):
+        value = attrs[key]
+        if not isinstance(value, float | int) or not math.isfinite(value) or value <= 0:
+            raise fail(f"attribute {key!r} must be a positive number, got {value!r}")
 
-        for name in ("gain", "split"):
-            if name not in f:
-                raise fail(f"missing dataset {name!r}")
-        gain_ds = f["gain"]
-        if gain_ds.dtype != np.float32 or gain_ds.ndim != 3:
-            raise fail(
-                f"dataset 'gain' must be float32 with 3 dimensions [T, N, num_prb], "
-                f"got {gain_ds.dtype} with shape {gain_ds.shape}"
-            )
-        num_traj, num_slots, num_prb = gain_ds.shape
-        if num_traj < 1 or num_slots < 1:
-            raise fail(f"dataset 'gain' is empty, shape {gain_ds.shape}")
-        if num_prb != attrs["num_prb"]:
-            raise fail(
-                f"dataset 'gain' has {num_prb} PRBs, attribute 'num_prb' says {attrs['num_prb']}"
-            )
-        gain = gain_ds[()]
-        if not np.all(np.isfinite(gain)):
-            raise fail("dataset 'gain' contains NaN or infinite values")
-        if np.any(gain < 0):
-            raise fail("dataset 'gain' contains negative values")
+    for name in ("gain", "split"):
+        if name not in f:
+            raise fail(f"missing dataset {name!r}")
+    gain_ds = f["gain"]
+    if gain_ds.dtype != np.float32 or gain_ds.ndim != 3:
+        raise fail(
+            f"dataset 'gain' must be float32 with 3 dimensions [T, N, num_prb], "
+            f"got {gain_ds.dtype} with shape {gain_ds.shape}"
+        )
+    num_traj, num_slots, num_prb = gain_ds.shape
+    if num_traj < 1 or num_slots < 1:
+        raise fail(f"dataset 'gain' is empty, shape {gain_ds.shape}")
+    if num_prb != attrs["num_prb"]:
+        raise fail(
+            f"dataset 'gain' has {num_prb} PRBs, attribute 'num_prb' says {attrs['num_prb']}"
+        )
+    mean_gain = np.empty(num_traj)
+    for t in range(num_traj):
+        block = gain_ds[t]
+        if not np.all(np.isfinite(block)):
+            raise fail(f"dataset 'gain' contains NaN or infinite values (trajectory {t})")
+        if np.any(block < 0):
+            raise fail(f"dataset 'gain' contains negative values (trajectory {t})")
+        mean_gain[t] = block.mean(dtype=np.float64)
 
-        split_ds = f["split"]
-        if split_ds.shape != (num_traj,) or split_ds.dtype.kind not in "OSU":
-            raise fail(f"dataset 'split' must hold {num_traj} strings, got shape {split_ds.shape}")
-        split = np.array(split_ds.asstr()[()], dtype=object)
-        if any(not label for label in split):
-            raise fail("dataset 'split' contains empty labels")
+    split_ds = f["split"]
+    if split_ds.shape != (num_traj,) or split_ds.dtype.kind not in "OSU":
+        raise fail(f"dataset 'split' must hold {num_traj} strings, got shape {split_ds.shape}")
+    split = np.array(split_ds.asstr()[()], dtype=object)
+    if any(not label for label in split):
+        raise fail("dataset 'split' contains empty labels")
 
-        expected = {
-            "group": (num_traj,),
-            "rx_position": (num_traj, num_slots, 3),
-            "rx_velocity": (num_traj, 3),
-        }
-        for name, shape in expected.items():
-            if name in f and f[name].shape != shape:
-                raise fail(f"dataset {name!r} must have shape {shape}, got {f[name].shape}")
-        if "num_paths" in f and (f["num_paths"].ndim != 2 or f["num_paths"].shape[0] != num_traj):
-            raise fail(f"dataset 'num_paths' must have shape ({num_traj}, A)")
-        group = f["group"][()] if "group" in f else None
+    expected = {"group": (num_traj,), "rx_position": (num_traj, num_slots, 3)}
+    for name, shape in expected.items():
+        if name in f and f[name].shape != shape:
+            raise fail(f"dataset {name!r} must have shape {shape}, got {f[name].shape}")
+    for name in ("num_paths", "los"):
+        if name in f and (f[name].ndim != 2 or f[name].shape[0] != num_traj):
+            raise fail(f"dataset {name!r} must have shape ({num_traj}, A), got {f[name].shape}")
+    if "num_paths" in f and "los" in f and f["num_paths"].shape != f["los"].shape:
+        raise fail("datasets 'num_paths' and 'los' must have the same shape")
+    group = f["group"][()] if "group" in f else None
+    category = None
+    if "category" in f:
+        ds = f["category"]
+        if ds.shape != (num_traj,) or ds.dtype.kind not in "OSU":
+            raise fail(f"dataset 'category' must hold {num_traj} strings, got shape {ds.shape}")
+        category = np.array(ds.asstr()[()], dtype=object)
+        unknown = sorted(set(category) - set(CATEGORIES))
+        if unknown:
+            raise fail(f"dataset 'category' has values {unknown}; allowed: {list(CATEGORIES)}")
 
-    return TraceData(path=path, gain=gain, split=split, group=group, attrs=attrs)
+    return TraceInfo(
+        path=path,
+        shape=(num_traj, num_slots, num_prb),
+        split=split,
+        group=group,
+        category=category,
+        attrs=attrs,
+        mean_gain=mean_gain,
+    )
 
 
 def _plain(value: Any) -> Any:
@@ -260,6 +344,11 @@ class TraceChannelSource:
     For each link of an episode, a trajectory is drawn uniformly (with replacement) among
     those whose split label is in ``splits``, and a start slot uniformly among the slots
     that leave ``num_slots`` slots in the trajectory. The draws use only ``seed``.
+
+    The file is validated once, in ``__init__``, without keeping its gains in memory; each
+    episode then reads only its windows. Each process opens its own read-only handle on
+    first use (again after a fork), so the source can be pickled and used in subprocess
+    vector environments. :meth:`close` releases the handle.
 
     SNR modes:
 
@@ -294,27 +383,27 @@ class TraceChannelSource:
         tx_power_dbm: float | None = None,
         noise_figure_db: float = 7.0,
     ) -> None:
-        trace = read_trace(path)
-        self.trace = trace
+        info = inspect_trace(path)
+        self.info = info
 
         def fail(message: str) -> TraceFormatError:
-            return TraceFormatError(f"{trace.path}: {message}")
+            return TraceFormatError(f"{info.path}: {message}")
 
-        if trace.num_prbs != num_prbs:
-            raise fail(f"trace has {trace.num_prbs} PRBs, the scenario has {num_prbs}")
+        if info.num_prbs != num_prbs:
+            raise fail(f"trace has {info.num_prbs} PRBs, the scenario has {num_prbs}")
         checks = {
             "carrier_frequency_hz": carrier_frequency,
             "subcarrier_spacing_hz": subcarrier_spacing,
             "slot_duration_s": slot_duration,
         }
         for key, value in checks.items():
-            if not math.isclose(trace.attrs[key], value, rel_tol=1e-9):
-                raise fail(f"trace {key} is {trace.attrs[key]}, the scenario has {value}")
-        if trace.num_slots < num_slots:
-            raise fail(f"trajectories have {trace.num_slots} slots, episodes need {num_slots}")
+            if not math.isclose(info.attrs[key], value, rel_tol=1e-9):
+                raise fail(f"trace {key} is {info.attrs[key]}, the scenario has {value}")
+        if info.num_slots < num_slots:
+            raise fail(f"trajectories have {info.num_slots} slots, episodes need {num_slots}")
         if not splits:
             raise ValueError("splits must not be empty")
-        available = sorted(set(trace.split))
+        available = sorted(set(info.split))
         unknown = [s for s in splits if s not in available]
         if unknown:
             raise fail(f"split(s) {unknown} not in the trace; available: {available}")
@@ -324,10 +413,9 @@ class TraceChannelSource:
         self.num_prbs = num_prbs
         self.splits = tuple(splits)
         self.snr_mode = snr_mode
-        self._eligible = np.flatnonzero(np.isin(trace.split, self.splits))
-        self._mean_gain = trace.gain.astype(np.float64).mean(axis=(1, 2))
+        self._eligible = np.flatnonzero(np.isin(info.split, self.splits))
         if snr_mode == "normalized":
-            zero = [int(i) for i in self._eligible if self._mean_gain[i] <= 0]
+            zero = [int(i) for i in self._eligible if info.mean_gain[i] <= 0]
             if zero:
                 raise fail(f"trajectories {zero} have zero mean gain; cannot normalize them")
             self.reference_snr_db = None
@@ -336,28 +424,51 @@ class TraceChannelSource:
                 raise ValueError("snr_mode='link_budget' requires tx_power_dbm")
             bandwidth = num_prbs * 12 * subcarrier_spacing
             self.reference_snr_db = link_budget_snr_db(tx_power_dbm, noise_figure_db, bandwidth)
+        self._file = None
+        self._file_pid = None
 
     def generate(self, num_slots: int, batch_size: int, seed: int) -> ChannelEpisode:
-        trace = self.trace
-        if num_slots > trace.num_slots:
-            raise ValueError(f"episodes of {num_slots} slots exceed the {trace.num_slots} slots")
+        info = self.info
+        if num_slots > info.num_slots:
+            raise ValueError(f"episodes of {num_slots} slots exceed the {info.num_slots} slots")
         rng = np.random.default_rng(seed)
         trajectories = rng.choice(self._eligible, size=batch_size)
-        offsets = rng.integers(0, trace.num_slots - num_slots + 1, size=batch_size)
+        offsets = rng.integers(0, info.num_slots - num_slots + 1, size=batch_size)
+        dataset = self._gain_dataset()
         gain = np.stack(
-            [trace.gain[t, o : o + num_slots] for t, o in zip(trajectories, offsets, strict=True)]
+            [dataset[t, o : o + num_slots] for t, o in zip(trajectories, offsets, strict=True)]
         )
         if self.snr_mode == "normalized":
-            gain = (gain / self._mean_gain[trajectories][:, None, None]).astype(np.float32)
-        info = {
+            gain = (gain / info.mean_gain[trajectories][:, None, None]).astype(np.float32)
+        episode_info = {
             "trajectory": trajectories.tolist(),
             "offset": offsets.tolist(),
-            "split": [str(trace.split[t]) for t in trajectories],
+            "split": [str(info.split[t]) for t in trajectories],
         }
-        if trace.group is not None:
-            info["group"] = [int(trace.group[t]) for t in trajectories]
+        if info.group is not None:
+            episode_info["group"] = [int(info.group[t]) for t in trajectories]
+        if info.category is not None:
+            episode_info["category"] = [str(info.category[t]) for t in trajectories]
         return ChannelEpisode(
             gain=torch.from_numpy(np.ascontiguousarray(gain)),
             reference_snr_db=self.reference_snr_db,
-            info=info,
+            info=episode_info,
         )
+
+    def close(self) -> None:
+        """Close the file handle of this process, if one is open."""
+        if self._file is not None and self._file_pid == os.getpid():
+            self._file.close()
+        self._file = None
+        self._file_pid = None
+
+    def _gain_dataset(self):
+        """The gain dataset, through a read-only handle owned by the current process."""
+        if self._file is None or self._file_pid != os.getpid():
+            self._file = _open_trace(self.info.path)
+            self._file_pid = os.getpid()
+        return self._file["gain"]
+
+    def __getstate__(self) -> dict[str, Any]:
+        # File handles belong to one process: a copy opens its own on first use
+        return self.__dict__ | {"_file": None, "_file_pid": None}

@@ -1,6 +1,8 @@
 """Channel sources: trace format validation, selection, SNR modes, simulator protocol."""
 
+import pickle
 import warnings
+from functools import partial
 
 import gymnasium
 import h5py
@@ -15,10 +17,12 @@ from linkgym.channels import (
     ChannelEpisode,
     TraceChannelSource,
     TraceFormatError,
+    inspect_trace,
     link_budget_snr_db,
     read_trace,
     write_trace,
 )
+from linkgym.env import LinkAdaptationEnv
 from linkgym.sim import MIN_MCS, LinkSimulator
 
 SPLITS = ["train", "train", "val", "val", "test", "test"]
@@ -105,10 +109,15 @@ def test_write_read_round_trip(tmp_path):
         prb_sampling="mean12",
         group=np.array(GROUPS),
         rx_position=rx_position,
+        num_paths=np.full((len(SPLITS), 12), 7),
+        los=np.ones((len(SPLITS), 12)),
         attrs={"scene": "synthetic"},
     )
     data = read_trace(path)
     np.testing.assert_array_equal(data.gain, gain)
+    with h5py.File(path, "r") as f:
+        assert f["num_paths"].dtype == np.int16 and f["los"].dtype == np.int8
+        assert f["gain"].chunks is None and f["gain"].compression is None  # contiguous
     assert data.split.tolist() == SPLITS
     assert data.group.tolist() == GROUPS
     assert (data.num_trajectories, data.num_slots, data.num_prbs) == gain.shape
@@ -157,6 +166,14 @@ def add_dataset(name, data):
     return apply
 
 
+def both(*datasets):
+    def apply(f):
+        for name, shape in datasets:
+            f.create_dataset(name, data=np.zeros(shape, np.int8))
+
+    return apply
+
+
 def set_split(labels):
     def apply(f):
         del f["split"]
@@ -199,8 +216,9 @@ def with_value(value):
         (set_split([*SPLITS[:-1], ""]), "empty labels"),
         (add_dataset("group", np.zeros(5, np.int32)), r"'group' must have shape \(6,\)"),
         (add_dataset("rx_position", np.zeros((6, NUM_SLOTS, 2))), "'rx_position' must have"),
-        (add_dataset("rx_velocity", np.zeros((6, 2))), "'rx_velocity' must have"),
         (add_dataset("num_paths", np.zeros(6, np.int16)), "'num_paths' must have"),
+        (add_dataset("los", np.zeros((6, 2, 2), np.int8)), "'los' must have"),
+        (both(("num_paths", (6, 3)), ("los", (6, 4))), "must have the same shape"),
     ],
 )
 def test_read_trace_rejects_invalid_files(tmp_path, mutate, match):
@@ -529,3 +547,114 @@ def test_simulator_checks_the_source():
         LinkSimulator(5, channel_source=ConstantSource(shape=(1, 4, NUM_PRBS)))
     with pytest.raises(ValueError, match="channel gain is torch.float64"):
         LinkSimulator(5, channel_source=ConstantSource(dtype=torch.float64))
+
+
+# Lazy loading
+
+
+def record_gain_reads(monkeypatch):
+    """Record the keys of every read of the 'gain' dataset."""
+    reads = []
+    original = h5py.Dataset.__getitem__
+
+    def recording(self, key):
+        if self.name == "/gain":
+            reads.append(key)
+        return original(self, key)
+
+    monkeypatch.setattr(h5py.Dataset, "__getitem__", recording)
+    return reads
+
+
+def test_validation_streams_one_trajectory_at_a_time(trace, monkeypatch):
+    path, gain = trace
+    reads = record_gain_reads(monkeypatch)
+    info = inspect_trace(path)
+    assert reads == list(range(len(SPLITS)))
+    np.testing.assert_allclose(info.mean_gain, gain.astype(np.float64).mean(axis=(1, 2)))
+    assert info.shape == gain.shape
+
+    source = make_source(path)
+    held = [v for v in (*vars(source).values(), *vars(source.info).values())]
+    assert all(v.size < gain.size / 10 for v in held if isinstance(v, np.ndarray))
+
+
+def test_generate_reads_only_the_episode_windows(trace, monkeypatch):
+    path, gain = trace
+    source = make_source(path)
+    reads = record_gain_reads(monkeypatch)
+    episode = source.generate(40, 3, seed=1)
+    windows = zip(episode.info["trajectory"], episode.info["offset"], strict=True)
+    assert reads == [(t, slice(o, o + 40)) for t, o in windows]
+    source.close()
+
+
+def test_source_pickles_and_opens_one_handle_per_process(trace):
+    path, _ = trace
+    source = make_source(path)
+    first = source.generate(40, 4, seed=2)  # opens the handle
+    copy = pickle.loads(pickle.dumps(source))
+    assert copy._file is None
+    assert torch.equal(copy.generate(40, 4, seed=2).gain, first.gain)
+
+    handle = source._file
+    source._file_pid = -1  # as seen from a forked child
+    assert torch.equal(source.generate(40, 4, seed=2).gain, first.gain)
+    assert source._file is not handle
+    for s in (source, copy):
+        s.close()
+    handle.close()
+
+
+def test_env_close_releases_the_trace_file(tmp_path):
+    path = tmp_path / "trace.h5"
+    write_synthetic(path)
+    env = make_trace_env(path)
+    env.reset(seed=0)
+    env.step(0)
+    env.close()
+    path.unlink()  # fails on Windows while a handle is open
+
+
+def trace_env_fns(path, n):
+    return [
+        partial(LinkAdaptationEnv, channel="trace", trace_path=str(path), episode_length=40)
+    ] * n
+
+
+def test_async_vector_env_matches_sync(trace):
+    path, _ = trace
+    sync = gymnasium.vector.SyncVectorEnv(trace_env_fns(path, 3))
+    spawned = gymnasium.vector.AsyncVectorEnv(trace_env_fns(path, 3), context="spawn")
+    try:
+        obs_sync, _ = sync.reset(seed=[1, 2, 3])
+        obs_spawned, _ = spawned.reset(seed=[1, 2, 3])
+        np.testing.assert_array_equal(obs_sync, obs_spawned)
+        for a in range(5):
+            actions = np.array([a, a + 5, a + 10])
+            out_sync, out_spawned = sync.step(actions), spawned.step(actions)
+            for x, y in zip(out_sync[:4], out_spawned[:4], strict=True):
+                np.testing.assert_array_equal(x, y)
+    finally:
+        sync.close()
+        spawned.close()
+
+
+def test_sb3_subproc_vec_env_matches_dummy(trace):
+    vec_env = pytest.importorskip("stable_baselines3.common.vec_env")
+    path, _ = trace
+    dummy = vec_env.DummyVecEnv(trace_env_fns(path, 2))
+    subproc = vec_env.SubprocVecEnv(trace_env_fns(path, 2), start_method="spawn")
+    try:
+        for env in (dummy, subproc):
+            env.seed(5)
+        np.testing.assert_array_equal(dummy.reset(), subproc.reset())
+        for a in range(5):
+            actions = np.array([a, a + 7])
+            out_dummy, out_subproc = dummy.step(actions), subproc.step(actions)
+            # DummyVecEnv keeps rewards in a float32 buffer, SubprocVecEnv returns float64
+            for x, y in zip(out_dummy[:3], out_subproc[:3], strict=True):
+                np.testing.assert_array_equal(np.float32(x), np.float32(y))
+    finally:
+        dummy.close()
+        subproc.close()

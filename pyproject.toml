@@ -45,6 +45,11 @@ dependencies = [
 train = ["stable-baselines3>=2.3,<3", "tensorboard"]
 dev = ["pytest", "ruff==0.16.9", "pre-commit"]
 docs = ["nbclient", "ipykernel"]
+# Trace generation only; install it in its own environment (see docs/channels.md)
+rt = ["sionna-rt==2.1.0"]
+
+[project.scripts]
+linkgym-traces = "linkgym.rt.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Tempip/linkgym"
@@ -91,4 +96,7 @@ known-first-party = ["linkgym"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["slow: long-running tests, skipped in CI"]
+markers = [
+    "slow: long-running tests, skipped in CI",
+    "rt: need Sionna RT and a CUDA GPU; skipped otherwise",
+]

@@ -25,6 +25,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bring-your-own-channel example.
 - Golden tests fixing the outputs of the TDL path (simulator, environment, tuned OLLA).
 - `h5py` as an explicit dependency.
+- Lazy trace loading: `TraceChannelSource` validates the file once without keeping its
+  gains in memory, reads only each episode's window and opens one read-only handle per
+  process, so subprocess vector environments share the file; `inspect_trace`,
+  `LinkAdaptationEnv.close` and `LinkSimulator.close`.
+- Optional trace datasets `los` (line-of-sight flag per path solve) and `category` (route
+  category `los`, `nlos` or `transition`, also in `channel_info`).
+- `linkgym.rt` and the `linkgym-traces` command (`generate`, `check`, `accuracy`, `plot`):
+  trace generation with Sionna RT from a JSON configuration (scene, transmitter, PRB grid,
+  routes with split, group and category, solver settings), with route checks against the
+  scene geometry, deterministic path solves at anchors with Doppler evolution in between,
+  dropping of trajectories without paths or below `min_mean_gain_db`, provenance
+  attributes, and `--routes`, `--splits` and `--solver KEY=VALUE` selections and overrides.
+  Optional extra `rt` (`sionna-rt==2.1.0`), to be installed in its own environment.
+- Munich dataset configuration (`examples/rt/munich.json`): one rooftop base station and
+  16 streets split by street into train, val and test, refraction off; the route figure
+  `docs/assets/munich_routes.png`, a small sample trace in `tests/data/`, and
+  `examples/rt/make_sample.py` and `examples/rt/dataset_stats.py`. The dataset itself is
+  generated locally; `docs/channels.md` documents its statistics and known limitations
+  (ray-tracing non-convergence, dropped trajectories, an alternative test realization).
+- A clearer `ImportError` from `linkgym.sim` when Sionna fails to import because
+  sionna-rt is installed in the same environment.
 
 ### Changed
 

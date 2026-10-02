@@ -12,17 +12,34 @@ no HARQ retransmissions. All computation runs on the CPU in float32.
 from __future__ import annotations
 
 import contextlib
+import importlib.metadata
 from collections.abc import Iterator
 from dataclasses import dataclass, fields
 
 import numpy as np
 import torch
-from sionna.phy import config as sionna_config
-from sionna.phy.channel import cir_to_ofdm_channel, subcarrier_frequencies
-from sionna.phy.channel.tr38901 import TDL
-from sionna.phy.nr import CarrierConfig
-from sionna.phy.nr.utils import MCSDecoderNR, TransportBlockNR
-from sionna.sys import EESM, InnerLoopLinkAdaptation, OuterLoopLinkAdaptation, PHYAbstraction
+
+try:
+    from sionna.phy import config as sionna_config
+    from sionna.phy.channel import cir_to_ofdm_channel, subcarrier_frequencies
+    from sionna.phy.channel.tr38901 import TDL
+    from sionna.phy.nr import CarrierConfig
+    from sionna.phy.nr.utils import MCSDecoderNR, TransportBlockNR
+    from sionna.sys import EESM, InnerLoopLinkAdaptation, OuterLoopLinkAdaptation, PHYAbstraction
+except ImportError as error:
+    try:
+        importlib.metadata.version("sionna-rt")
+    except importlib.metadata.PackageNotFoundError:
+        raise error from None
+    # sionna-rt's sionna/__init__.py replaces sionna-no-rt's and imports Sionna RT, which
+    # needs a CUDA GPU or LLVM, on every `import sionna`
+    raise ImportError(
+        f"Importing Sionna failed: {error}. Sionna RT (sionna-rt, installed by the "
+        "linkgym[rt] extra) is installed in this environment; it makes every `import sionna` "
+        "import Sionna RT, which needs a CUDA GPU or LLVM. Install linkgym[rt] in its own "
+        "environment for trace generation and train in an environment without it "
+        "(docs/channels.md)."
+    ) from error
 
 from linkgym.channels import ChannelEpisode, ChannelSource
 
@@ -299,6 +316,12 @@ class LinkSimulator:
         )
         self.slot += 1
         return result
+
+    def close(self) -> None:
+        """Release the resources of the channel source, e.g. an open trace file."""
+        close = getattr(self._source, "close", None)
+        if close is not None:
+            close()
 
 
 def run_episode(

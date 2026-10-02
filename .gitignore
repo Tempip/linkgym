@@ -10,6 +10,7 @@ dist/
 
 # Virtual environments
 .venv/
+.venv-rt/
 venv/
 env/
 
@@ -29,6 +30,9 @@ htmlcov/
 # Training outputs and model checkpoints (root only; docs/results/ is committed)
 /runs/
 /results/
+
+# Generated trace datasets (tests/data/ holds the committed sample)
+/data/
 *.zip
 
 # IDE and OS files
