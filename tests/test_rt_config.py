@@ -62,11 +62,11 @@ def test_munich_config():
     assert config.min_mean_gain_db == -150.0
     assert config.attribution_text == rt_config.OSM_ATTRIBUTION
     splits = [r.split for r in config.routes]
-    assert len(config.routes) == 16
-    assert (splits.count("train"), splits.count("val"), splits.count("test")) == (10, 3, 3)
-    assert len({r.group for r in config.routes}) == 16
+    assert len(config.routes) == 15
+    assert (splits.count("train"), splits.count("val"), splits.count("test")) == (8, 3, 4)
+    assert len({r.group for r in config.routes}) == 15
     total = sum(r.length for r in config.routes)
-    assert 3500 < total < 4000
+    assert 3250 < total < 3350
     # Split by street: no route within 10 m of a route of another split
     assert max(split_overlap(config).values()) == 0.0
 

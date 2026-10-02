@@ -322,22 +322,25 @@ line to the antenna. This site covers about 26 % and sees a long north-south str
 the square and two streets leading into it, with NLoS streets all around. An antenna set
 back from the roof edge sees much less: the street below is hidden by the roof edge.
 
-**Routes.** 16 streets, 3536 m in total, split by street: no street is in two splits, and
+**Routes.** 15 streets, 3301 m in total, split by street: no street is in two splits, and
 no route comes within 10 m of a route of another split (checked by `linkgym-traces
-check`). As configured, each split has a line-of-sight, an NLoS and a transition route;
-after dropping trajectories without coverage (below), val has no NLoS route left. The
-routes follow the street centres, at least 1.6 m from any surface. In this scene a building
-closes the avenue north-west of the square near x = -95 m; its two halves are two routes,
-both in val.
+check`). Every split has kept trajectories of all three route categories, and val and test
+each have a fully covered NLoS street (`north-street` and `long-diagonal`), so that model
+selection and stratified test results see NLoS data. The routes follow the street centres,
+at least 1.6 m from any surface. In this scene a building closes the avenue north-west of
+the square near x = -95 m; its two halves are two routes, both in val.
 
-| split | routes | length | trajectories configured | kept | LoS share of kept | route categories (with kept trajectories) |
-|---|---:|---:|---:|---:|---:|---|
-| train | 10 | 2275 m | 70 | 51 | 0.22 | 1 los, 2 transition, 7 nlos |
-| val | 3 | 548 m | 16 | 9 | 0.50 | 1 los, 1 transition |
-| test | 3 | 713 m | 22 | 16 | 0.41 | 1 los, 1 transition, 1 nlos |
+| split | routes | length | trajectories configured | kept | kept los / transition / nlos | LoS share of kept |
+|---|---:|---:|---:|---:|---|---:|
+| train | 8 | 1869 m | 58 | 39 | 8 / 13 / 18 | 0.29 |
+| val | 3 | 481 m | 14 | 14 | 3 / 6 / 5 | 0.32 |
+| test | 4 | 951 m | 29 | 23 | 5 / 10 / 8 | 0.29 |
 
 The LoS share is the share of path solves with a line-of-sight path. Route categories are
-derived from each route's LoS share (`nlos` up to 0.05, `los` from 0.75).
+derived from each route's LoS share (`nlos` up to 0.05, `los` from 0.75). A first version
+of the split had an NLoS street in val whose trajectories were all dropped (no coverage)
+and a single kept NLoS trajectory in test; that street was removed, and two well-covered
+NLoS streets moved from train to val and test.
 
 **Receiver.** 1.5 m above ground, isotropic, vertically polarized, like the transmitter.
 It moves at 15 m/s, the default speed of `LinkAdaptation-v0`, chosen for comparability
@@ -355,7 +358,7 @@ Open Database License (ODbL). The attribution is stored in every trace file.
 -150 dB (`min_mean_gain_db`) are dropped.
 
 **Generating it.** The dataset is not distributed; generate it in an environment with the
-`rt` extra (an RTX 3060 took 78 min, 99-124 ms per path solve; 67 MB for 76 trajectories):
+`rt` extra (an RTX 3060 took 74 min, 101-119 ms per path solve; 67 MB for 76 trajectories):
 
 ```bash
 linkgym-traces generate examples/rt/munich.json -o data/munich-v1.h5
@@ -363,7 +366,7 @@ linkgym-traces generate examples/rt/munich.json -o data/munich-v1-test-alt.h5 --
 ```
 
 The second command writes the alternative test realization (see the limitations below;
-20 min, 14 MB for 16 trajectories).
+27 min, 20 MB for 23 trajectories).
 [tests/data/munich_sample.h5](../tests/data/munich_sample.h5) (0.9 MB) holds the first
 1000 slots of one trajectory each of `north-canyon` (train, los), `east-avenue` (train,
 nlos), `nw-avenue` (val, transition) and `west-street` (test, transition), made with
@@ -379,13 +382,12 @@ nlos), `nw-avenue` (val, transition) and `west-street` (test, transition), made 
 | canyon-cross | train | transition | 5 (0) | 0.12 | -88.3 dB |
 | ne-north-south | train | nlos | 3 (1) | 0.00 | -145.4 dB |
 | sw-avenue | train | nlos | 2 (4) | 0.00 | -121.8 dB |
-| north-street | train | nlos | 5 (0) | 0.00 | -111.0 dB |
-| long-diagonal | train | nlos | 7 (0) | 0.00 | -108.1 dB |
+| north-street | val | nlos | 5 (0) | 0.00 | -111.0 dB |
+| long-diagonal | test | nlos | 7 (0) | 0.00 | -108.1 dB |
 | kaufinger | train | nlos | 1 (7) | 0.00 | -130.4 dB |
 | rathaus-west | train | transition | 8 (0) | 0.41 | -86.6 dB |
 | nw-avenue | val | transition | 6 (0) | 0.25 | -93.6 dB |
 | nw-diagonal | val | los | 3 (0) | 1.00 | -85.9 dB |
-| ne-diagonal | val | - | 0 (7) | - | - |
 | west-street | test | transition | 10 (0) | 0.21 | -90.0 dB |
 | south-street | test | los | 5 (0) | 0.90 | -82.3 dB |
 | south-curve | test | nlos | 1 (6) | 0.00 | -126.7 dB |
@@ -453,11 +455,12 @@ deterministic ray-tracing realization of the scene.
 
 **Alternative test realization.** `munich-v1-test-alt.h5` holds the test split generated
 again with 8 million rays and the 1e6 path buffer, all else equal. It keeps and drops the
-same trajectories. Between the two realizations, the mean gain of the 16 test trajectories
-differs by 0.10 dB in the median (1.1 dB at most), the frequency and time correlations by
-0.01 in the median (0.25 at most), and the normalized EESM effective SINR per slot by
-2.4 dB at the 95th percentile of a typical trajectory (42 dB for the one deep NLoS
-trajectory, in its deep fades). Evaluating trained agents on both test realizations shows
+same trajectories. Between the two realizations, the mean gain of the 23 test trajectories
+differs by 0.12 dB in the median (6.1 dB at most, on the NLoS street `long-diagonal`), the
+frequency and time correlations by 0.02 in the median (0.57 at most, also on
+`long-diagonal`), and the normalized EESM effective SINR per slot by 2.6 dB at the 95th
+percentile of a typical trajectory (42 dB for the one kept `south-curve` trajectory, in its
+deep fades). NLoS streets depend most on the ray budget. Evaluating trained agents on both test realizations shows
 whether conclusions survive the non-convergence.
 
 **Anchor spacing.** Between path solves, the channel evolves by Doppler with the paths of
@@ -478,14 +481,14 @@ The largest errors are a few slots around abrupt changes of the path set, which 
 spacing removes; elsewhere the anchored channel follows the per-slot one closely. (On a
 line-of-sight route without diffraction, the NMSE at 10 slots was -39.5 dB.)
 
-**Dropped trajectories.** 32 of the 108 trajectories were dropped, all on NLoS routes far
-from the base station: 21 because a slot had no path at all (`se-avenue` 7 of 10,
-`south-curve` 6 of 7, `sw-avenue` 4 of 6, `ne-diagonal` 3 of 7, `ne-north-south` 1 of 4)
-and 11 because their mean gain was below -150 dB (`kaufinger` 7 of 8, `ne-diagonal` 4 of 7;
-between -153 and -206 dB). The val NLoS route `ne-diagonal` lost all its trajectories, so
-val has a line-of-sight and a transition route only, and the NLoS parts of train (51 of 70
-trajectories kept) and test (16 of 22) are thinner than configured. The reason and mean
-gain of every dropped trajectory are stored in the `routes` attribute.
+**Dropped trajectories.** 25 of the 101 configured trajectories are dropped, all on NLoS
+routes far from the base station: 18 because a slot had no path at all (`se-avenue` 7 of
+10, `south-curve` 6 of 7, `sw-avenue` 4 of 6, `ne-north-south` 1 of 4) and 7 because their
+mean gain was below -150 dB (`kaufinger` 7 of 8, between -155 and -206 dB). Train keeps 39
+of 58 trajectories, val all 14 and test 23 of 29. A sixteenth street, north-east of the
+base station, lost all 7 of its trajectories (3 without paths, 4 below -150 dB) and was
+removed from the configuration. The reason and mean gain of every dropped trajectory are
+stored in the `routes` attribute.
 
 **Coverage.** With refraction off, parts of the far NLoS streets have almost no signal;
 they are kept unless a trajectory's mean gain is below -150 dB (an SNR of about -26 dB at

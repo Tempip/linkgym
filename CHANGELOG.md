@@ -39,7 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attributes, and `--routes`, `--splits` and `--solver KEY=VALUE` selections and overrides.
   Optional extra `rt` (`sionna-rt==2.1.0`), to be installed in its own environment.
 - Munich dataset configuration (`examples/rt/munich.json`): one rooftop base station and
-  16 streets split by street into train, val and test, refraction off; the route figure
+  15 streets split by street into train, val and test (each with line-of-sight, NLoS and
+  transition data), refraction off; the route figure
   `docs/assets/munich_routes.png`, a small sample trace in `tests/data/`, and
   `examples/rt/make_sample.py` and `examples/rt/dataset_stats.py`. The dataset itself is
   generated locally; `docs/channels.md` documents its statistics and known limitations
