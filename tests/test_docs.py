@@ -1,4 +1,4 @@
-"""The README code and the quickstart notebook run as documented."""
+"""The README and docs code and the quickstart notebook run as documented."""
 
 import re
 import time
@@ -9,9 +9,13 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 
 
-def readme_python_blocks() -> list[str]:
-    text = (REPO / "README.md").read_text(encoding="utf-8")
+def python_blocks(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
     return re.findall(r"```python\r?\n(.*?)```", text, flags=re.DOTALL)
+
+
+def readme_python_blocks() -> list[str]:
+    return python_blocks(REPO / "README.md")
 
 
 def test_readme_has_two_python_snippets():
@@ -24,6 +28,14 @@ def test_readme_snippet_runs_verbatim(index):
         pytest.importorskip("stable_baselines3")
     code = readme_python_blocks()[index]
     exec(compile(code, f"README.md python block {index + 1}", "exec"), {"__name__": "__readme__"})
+
+
+def test_bring_your_own_channel_snippet_runs_verbatim(tmp_path, monkeypatch):
+    blocks = python_blocks(REPO / "docs" / "channels.md")
+    assert len(blocks) == 1
+    monkeypatch.chdir(tmp_path)  # the snippet writes my_channel.h5
+    exec(compile(blocks[0], "docs/channels.md python block", "exec"), {"__name__": "__docs__"})
+    assert (tmp_path / "my_channel.h5").exists()
 
 
 @pytest.mark.slow

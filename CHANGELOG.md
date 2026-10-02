@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `linkgym.channels`: the `ChannelSource` interface and `ChannelEpisode`, a stable
+  extension point for channel models (linear power gain per slot and PRB, optional
+  reference SNR).
+- Trace-based channels: `TraceChannelSource` reads HDF5 trace files (format version 1,
+  `write_trace`/`read_trace`) with validation against the scenario, per-trajectory split
+  labels and seeded selection of trajectory and start slot.
+- SNR modes `normalized` (scenario SNR, unit mean gain per trajectory) and `link_budget`
+  (transmit power, thermal noise and noise figure, `link_budget_snr_db`).
+- Scenario fields `channel`, `trace_path`, `trace_splits`, `snr_mode`, `tx_power_dbm` and
+  `noise_figure_db`; the defaults keep the v0.1 TDL scenario.
+- `LinkAdaptationEnv.channel_info` and `LinkSimulator.channel_info`: trajectory, start
+  slot, split and realized mean SNR of the episode.
+- `docs/channels.md`: interface, trace format, SNR modes, limitations and a tested
+  bring-your-own-channel example.
+- Golden tests fixing the outputs of the TDL path (simulator, environment, tuned OLLA).
+- `h5py` as an explicit dependency.
+
+### Changed
+
+- `TDLChannelGain.generate` returns a `ChannelEpisode`; `LinkSimulator` takes an optional
+  `channel_source`. The TDL outputs are unchanged.
+
+### Removed
+
+- `linkgym.sim.ChannelGainSource`, replaced by `linkgym.channels.ChannelSource`.
+
 ## [0.1.0] - 2026-09-30
 
 ### Added

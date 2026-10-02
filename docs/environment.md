@@ -20,7 +20,7 @@ own script.
 ## Episode
 
 - An episode has `episode_length` slots (default 1000). The channel of all slots is
-  generated in `reset()`.
+  generated (TDL) or read from a trace file in `reset()`; see [channels.md](channels.md).
 - The step that transmits the last slot returns `truncated=True`. `terminated` is always
   `False`. The environment is registered without `max_episode_steps`; it truncates itself.
 - Calling `step()` after the last slot raises `RuntimeError`.
@@ -89,7 +89,7 @@ are the TB information bits on ACK and 0 on NACK.
 | `ack` | | yes | `True` for ACK |
 | `bits` | | yes | delivered TB information bits of slot t |
 | `tbler` | | yes | TBLER of slot t; the ACK is drawn from it |
-| `snr_db` | yes | yes | mean SNR of the episode [dB] |
+| `snr_db` | yes | yes | mean SNR of the episode [dB]: the scenario SNR, or with `snr_mode="link_budget"` the realized mean SNR of the episode's slots |
 | `num_allocated_re` | yes | yes | data resource elements per slot (constant, 7488 by default) |
 | `report` | `None` | yes | the raw report that entered the observation: `slot`, `sinr_wideband_db` (unclipped), `ack`, `mcs`; `None` while no report exists |
 | `privileged` | yes | yes | `sinr_prb` (float32, linear per-PRB SINR) and `num_data_symbols` of the slot the next action decides; `None` after the last slot |
@@ -101,6 +101,10 @@ decided, which no real scheduler knows; agents must not use it.
 `ack_uniform`, the uniform draw behind the ACK. It is meant for analysis and tests and is
 not part of the observation or the info.
 
+`env.unwrapped.channel_info` describes the channel of the current episode: the trace
+trajectory, start slot and split, and the realized mean SNR of the episode's slots
+(`realized_snr_db`). See [channels.md](channels.md#selection-and-splits).
+
 ## Scenario
 
 `linkgym.ScenarioConfig` fields. Each one can be passed to `gymnasium.make` as a keyword,
@@ -111,23 +115,32 @@ or a whole `config=ScenarioConfig(...)` can be passed and overridden by keywords
 | `episode_length` | 1000 | slots per episode |
 | `snr_db` | `None` | fixed mean SNR [dB]; `None` draws it per episode |
 | `snr_db_range` | (5.0, 20.0) | range of the uniform per-episode SNR draw [dB] |
-| `speed` | 15.0 | UE speed [m/s] |
+| `speed` | 15.0 | UE speed [m/s] (TDL) |
 | `feedback_delay` | 1 | delay d of the reports [slots], >= 1 |
 | `num_reports` | 4 | number K of reports in the observation |
-| `tdl_model` | "A" | TR 38.901 TDL profile |
-| `delay_spread` | 100e-9 | RMS delay spread [s] |
+| `tdl_model` | "A" | TR 38.901 TDL profile (TDL) |
+| `delay_spread` | 100e-9 | RMS delay spread [s] (TDL) |
 | `carrier_frequency` | 3.5e9 | carrier frequency [Hz] |
 | `num_prbs` | 52 | allocated PRBs |
 | `subcarrier_spacing` | 30e3 | subcarrier spacing [Hz] |
 | `num_data_symbols` | 12 | OFDM symbols per slot carrying data |
+| `channel` | "tdl" | "tdl" (TDL fading) or "trace" (gains read from `trace_path`) |
+| `trace_path` | `None` | trace file, required for `channel="trace"` |
+| `trace_splits` | ("train",) | split labels of the trace trajectories to draw from |
+| `snr_mode` | "normalized" | "normalized" (scenario SNR) or "link_budget" (trace only) |
+| `tx_power_dbm` | `None` | transmit power [dBm], required for `snr_mode="link_budget"` |
+| `noise_figure_db` | 7.0 | receiver noise figure [dB] (link budget) |
+
+The channel fields are described in [channels.md](channels.md).
 
 ## Randomness
 
 All randomness derives from the seed passed to `reset()`. `reset(seed)` seeds
-`self.np_random`, which draws the SNR (if not fixed) and then a simulator seed; the
-simulator derives independent channel and ACK seeds from it, using its own
-`torch.Generator` for the ACK draws. Sionna's global generator is left unchanged by the
-episode generation.
+`self.np_random`, which draws the SNR (if not fixed, and not with
+`snr_mode="link_budget"`) and then a simulator seed; the simulator derives independent
+channel and ACK seeds from it, using its own `torch.Generator` for the ACK draws. With a
+trace, the channel seed selects the trajectory and the start slot. Sionna's global
+generator is left unchanged by the episode generation.
 
 The channel and the ACK uniforms do not depend on the actions. With the same seed, every
 policy faces the same SNR, the same channel and the same ACK draw in every slot, so

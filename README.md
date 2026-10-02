@@ -184,6 +184,10 @@ Full lists:
 - A reward variant with a TBLER constraint.
 - Vectorised, batched environments for faster training.
 
+Later:
+
+- PDSCH MCS table 2 (256-QAM, BLER data up to 25 dB).
+
 ## Contributing
 
 Setup, checks and commit conventions are in

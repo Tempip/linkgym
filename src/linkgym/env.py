@@ -10,8 +10,16 @@ import numpy as np
 import torch
 from gymnasium import spaces
 
+from linkgym.channels import TraceChannelSource
 from linkgym.config import ScenarioConfig
-from linkgym.sim import MAX_MCS, MIN_MCS, LinkResult, LinkSimulator, tb_size_per_mcs
+from linkgym.sim import (
+    MAX_MCS,
+    MIN_MCS,
+    LinkResult,
+    LinkSimulator,
+    slot_duration,
+    tb_size_per_mcs,
+)
 
 SINR_DB_MIN = -10.0
 SINR_DB_MAX = 40.0
@@ -34,7 +42,9 @@ class LinkAdaptationEnv(gymnasium.Env):
 
     At step t the agent chooses the MCS of slot t. With feedback delay d
     (``feedback_delay``), the observation it sees holds the reports of slots <= t - d.
-    An episode has ``episode_length`` slots; the channel is generated in :meth:`reset`.
+    An episode has ``episode_length`` slots; the channel is generated in :meth:`reset`,
+    from the TDL model (``channel="tdl"``) or a trace file (``channel="trace"``, see
+    docs/channels.md).
     The last step returns ``truncated=True``; ``terminated`` is always `False`.
 
     **Action**: ``Discrete(26)``; action a selects MCS a + 3 (MCS 3-28).
@@ -58,7 +68,8 @@ class LinkAdaptationEnv(gymnasium.Env):
     **Info** returned by :meth:`step`:
 
     - ``mcs``, ``ack``, ``bits``, ``tbler``: outcome of slot t
-    - ``snr_db``: mean SNR of the episode [dB]
+    - ``snr_db``: mean SNR of the episode [dB]: the drawn or fixed scenario SNR, or with
+      ``snr_mode="link_budget"`` the mean SNR of the episode's slots
     - ``num_allocated_re``: data resource elements per slot (constant)
     - ``report``: the raw report that entered the observation (``slot``,
       ``sinr_wideband_db``, ``ack``, ``mcs``), or `None` if there is none yet
@@ -95,6 +106,20 @@ class LinkAdaptationEnv(gymnasium.Env):
         self.render_mode = render_mode
 
         c = self.config
+        channel_source = None
+        if c.channel == "trace":
+            channel_source = TraceChannelSource(
+                c.trace_path,
+                num_prbs=c.num_prbs,
+                subcarrier_spacing=c.subcarrier_spacing,
+                carrier_frequency=c.carrier_frequency,
+                slot_duration=slot_duration(c.subcarrier_spacing),
+                num_slots=c.episode_length,
+                splits=c.trace_splits,
+                snr_mode=c.snr_mode,
+                tx_power_dbm=c.tx_power_dbm,
+                noise_figure_db=c.noise_figure_db,
+            )
         self._sim = LinkSimulator(
             c.episode_length,
             snr_db=c.snr_db_range[0] if c.snr_db is None else c.snr_db,  # set in reset()
@@ -105,6 +130,7 @@ class LinkAdaptationEnv(gymnasium.Env):
             num_prbs=c.num_prbs,
             subcarrier_spacing=c.subcarrier_spacing,
             num_data_symbols=c.num_data_symbols,
+            channel_source=channel_source,
         )
         self.slot_duration = self._sim.slot_duration
         self.num_allocated_re = self._sim.num_allocated_re
@@ -115,7 +141,7 @@ class LinkAdaptationEnv(gymnasium.Env):
             -1.0, 1.0, shape=(REPORT_SIZE * c.num_reports,), dtype=np.float32
         )
 
-        self.snr_db = self._sim.snr_db
+        self.snr_db = self._episode_snr_db()
         self._sinr_wideband_db = np.zeros(c.episode_length)
         self._reports: list[dict[str, Any]] = []
         self._last_result: LinkResult | None = None
@@ -130,6 +156,15 @@ class LinkAdaptationEnv(gymnasium.Env):
         """
         return self._last_result
 
+    @property
+    def channel_info(self) -> dict[str, Any]:
+        """Channel of the current episode, e.g. the trace trajectory, offset and split.
+
+        Always includes ``realized_snr_db``, the mean SNR of the episode's slots [dB]
+        (10 log10 of the mean linear per-PRB SINR over all slots).
+        """
+        return {key: value[0] for key, value in self._sim.channel_info.items()}
+
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[np.ndarray, dict[str, Any]]:
@@ -137,12 +172,15 @@ class LinkAdaptationEnv(gymnasium.Env):
         c = self.config
         # All randomness derives from self.np_random: the SNR, then the simulator seed,
         # from which the simulator derives the channel and ACK seeds.
-        if c.snr_db is None:
-            self.snr_db = float(self.np_random.uniform(*c.snr_db_range))
-        else:
-            self.snr_db = float(c.snr_db)
+        snr_db = None  # link budget: the channel source sets the SNR
+        if c.snr_mode != "link_budget":
+            if c.snr_db is None:
+                snr_db = float(self.np_random.uniform(*c.snr_db_range))
+            else:
+                snr_db = float(c.snr_db)
         sim_seed = int(self.np_random.integers(np.iinfo(np.int64).max))
-        self._sim.reset(sim_seed, snr_db=self.snr_db)
+        self._sim.reset(sim_seed, snr_db=snr_db)
+        self.snr_db = self._episode_snr_db()
 
         # Wideband SINR per slot [dB], independent of the MCS
         wideband = 10.0 * torch.log10(self._sim.sinr[0].mean(dim=-1))
@@ -192,6 +230,12 @@ class LinkAdaptationEnv(gymnasium.Env):
             f"{'ACK ' if report['ack'] else 'NACK'} | {bits:6d} bits | "
             f"running TBLER {running_tbler:.3f}"
         )
+
+    def _episode_snr_db(self) -> float:
+        """Mean SNR of the episode [dB] reported in the info."""
+        if self.config.snr_mode == "link_budget":
+            return float(self._sim.channel_info["realized_snr_db"][0])
+        return float(self._sim.snr_db)
 
     def _newest_report_slot(self) -> int:
         """Slot of the most recent report available for the next decision (< 0: none)."""

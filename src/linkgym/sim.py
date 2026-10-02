@@ -14,7 +14,6 @@ from __future__ import annotations
 import contextlib
 from collections.abc import Iterator
 from dataclasses import dataclass, fields
-from typing import Protocol
 
 import numpy as np
 import torch
@@ -24,6 +23,8 @@ from sionna.phy.channel.tr38901 import TDL
 from sionna.phy.nr import CarrierConfig
 from sionna.phy.nr.utils import MCSDecoderNR, TransportBlockNR
 from sionna.sys import EESM, InnerLoopLinkAdaptation, OuterLoopLinkAdaptation, PHYAbstraction
+
+from linkgym.channels import ChannelEpisode, ChannelSource
 
 DEVICE = "cpu"
 MCS_CATEGORY = 1  # PDSCH
@@ -53,19 +54,18 @@ def seeded_sionna_rng(seed: int) -> Iterator[None]:
         generator.set_state(state)
 
 
-class ChannelGainSource(Protocol):
-    """Pre-generates the channel power gain of a fixed-length episode."""
-
-    def generate(self, num_slots: int, batch_size: int, seed: int) -> torch.Tensor:
-        """Return |h|^2 with unit mean, shape [batch_size, num_slots, num_freq]."""
-        ...
+def slot_duration(subcarrier_spacing: float) -> float:
+    """Slot duration [s] of the 5G NR numerology with ``subcarrier_spacing`` [Hz]."""
+    carrier = CarrierConfig(subcarrier_spacing=round(subcarrier_spacing / 1e3))
+    return carrier.sub_frame_duration / carrier.num_slots_per_subframe
 
 
 class TDLChannelGain:
     """3GPP TR 38.901 TDL fading, sampled once per slot and once per PRB.
 
-    The TDL power delay profile is normalized to unit energy, so |h|^2 has unit
-    mean over channel realizations.
+    A :class:`~linkgym.channels.ChannelSource`. The TDL power delay profile is normalized
+    to unit energy, so |h|^2 has unit mean over channel realizations and the episode uses
+    the scenario SNR (``reference_snr_db`` is `None`).
     """
 
     def __init__(
@@ -79,6 +79,7 @@ class TDLChannelGain:
         subcarrier_spacing: float,
         slot_duration: float,
     ) -> None:
+        self.num_prbs = num_prbs
         self._sampling_frequency = 1.0 / slot_duration
         self._tdl = TDL(
             tdl_model,
@@ -90,7 +91,7 @@ class TDLChannelGain:
         # One frequency point per PRB, spaced by the PRB bandwidth
         self._frequencies = subcarrier_frequencies(num_prbs, 12 * subcarrier_spacing, device=DEVICE)
 
-    def generate(self, num_slots: int, batch_size: int, seed: int) -> torch.Tensor:
+    def generate(self, num_slots: int, batch_size: int, seed: int) -> ChannelEpisode:
         # TDL keeps time correlation only within one call (tdl.py:595-628),
         # so the whole episode is generated at once.
         with seeded_sionna_rng(seed):
@@ -101,7 +102,7 @@ class TDLChannelGain:
             )
         # [batch_size, 1, 1, 1, 1, num_slots, num_prbs]
         h = cir_to_ofdm_channel(self._frequencies, a, tau)
-        return h[:, 0, 0, 0, 0].abs().square()
+        return ChannelEpisode(gain=h[:, 0, 0, 0, 0].abs().square())
 
 
 @dataclass(frozen=True)
@@ -177,18 +178,24 @@ class LinkSimulator:
     :meth:`reset`. The seed fixes both the channel and the ACK draws; no global random
     state is read or left modified by the episode generation.
 
+    The channel comes from ``channel_source`` (a :class:`~linkgym.channels.ChannelSource`),
+    or from a :class:`TDLChannelGain` built from the TDL arguments if it is `None`. The
+    SINR is ``10 ** (snr_db / 10) * gain`` with the episode's ``reference_snr_db`` if set,
+    else the scenario ``snr_db``.
+
     :param num_slots: Episode length in slots
     :param batch_size: Number of independent links B
     :param seed: Seed of the episode
     :param snr_db: Mean SNR [dB]; can be changed per episode in :meth:`reset`
-    :param speed: UE speed [m/s]
-    :param tdl_model: TDL profile, e.g. "A" to "E"
-    :param delay_spread: RMS delay spread [s]
-    :param carrier_frequency: Carrier frequency [Hz]
+    :param speed: UE speed [m/s] (TDL)
+    :param tdl_model: TDL profile, e.g. "A" to "E" (TDL)
+    :param delay_spread: RMS delay spread [s] (TDL)
+    :param carrier_frequency: Carrier frequency [Hz] (TDL)
     :param num_prbs: Number of allocated PRBs
     :param subcarrier_spacing: Subcarrier spacing [Hz]
     :param num_data_symbols: OFDM symbols per slot carrying data
     :param phy_abstraction: Shared PHYAbstraction instance; a new one is created if `None`
+    :param channel_source: Channel source; a TDL source is built if `None`
     """
 
     def __init__(
@@ -206,6 +213,7 @@ class LinkSimulator:
         subcarrier_spacing: float = 30e3,
         num_data_symbols: int = 12,
         phy_abstraction: PHYAbstraction | None = None,
+        channel_source: ChannelSource | None = None,
     ) -> None:
         self.num_slots = num_slots
         self.batch_size = batch_size
@@ -213,29 +221,35 @@ class LinkSimulator:
         self.num_data_symbols = num_data_symbols
         # Data resource elements per slot (single layer)
         self.num_allocated_re = 12 * num_prbs * num_data_symbols
-        carrier = CarrierConfig(subcarrier_spacing=round(subcarrier_spacing / 1e3))
-        self.slot_duration = carrier.sub_frame_duration / carrier.num_slots_per_subframe
+        self.slot_duration = slot_duration(subcarrier_spacing)
 
         if phy_abstraction is None:
             phy_abstraction = PHYAbstraction(device=DEVICE)
         self.phy_abstraction = phy_abstraction
         self._eesm = EESM(device=DEVICE)
         self._tb_size = tb_size_per_mcs(self.num_allocated_re)
-        self._source: ChannelGainSource = TDLChannelGain(
-            speed=speed,
-            tdl_model=tdl_model,
-            delay_spread=delay_spread,
-            carrier_frequency=carrier_frequency,
-            num_prbs=num_prbs,
-            subcarrier_spacing=subcarrier_spacing,
-            slot_duration=self.slot_duration,
-        )
+        if channel_source is None:
+            channel_source = TDLChannelGain(
+                speed=speed,
+                tdl_model=tdl_model,
+                delay_spread=delay_spread,
+                carrier_frequency=carrier_frequency,
+                num_prbs=num_prbs,
+                subcarrier_spacing=subcarrier_spacing,
+                slot_duration=self.slot_duration,
+            )
+        elif channel_source.num_prbs != num_prbs:
+            raise ValueError(
+                f"channel_source has {channel_source.num_prbs} PRBs, the simulator {num_prbs}"
+            )
+        self._source: ChannelSource = channel_source
         self.reset(seed)
 
     def reset(self, seed: int, *, snr_db: float | None = None) -> None:
         """Generate a new episode from ``seed`` and restart at slot 0.
 
-        :param snr_db: New mean SNR [dB]; if `None`, the current ``snr_db`` is kept
+        :param snr_db: New mean SNR [dB]; if `None`, the current ``snr_db`` is kept. Not
+            used for episodes whose channel sets ``reference_snr_db``.
         """
         if snr_db is not None:
             self.snr_db = snr_db
@@ -243,9 +257,24 @@ class LinkSimulator:
         channel_seed, ack_seed = (
             int(s) for s in np.random.SeedSequence(seed).generate_state(2, dtype=np.uint64)
         )
-        gain = self._source.generate(self.num_slots, self.batch_size, channel_seed)
+        episode = self._source.generate(self.num_slots, self.batch_size, channel_seed)
+        expected = (self.batch_size, self.num_slots, self._source.num_prbs)
+        if tuple(episode.gain.shape) != expected or episode.gain.dtype != torch.float32:
+            raise ValueError(
+                f"channel gain is {episode.gain.dtype} with shape {tuple(episode.gain.shape)}, "
+                f"expected torch.float32 with shape {expected}"
+            )
+        reference = episode.reference_snr_db
+        if reference is None:
+            reference = self.snr_db
+        elif isinstance(reference, np.ndarray):
+            reference = torch.as_tensor(reference, dtype=torch.float32).reshape(-1, 1, 1)
         # [B, num_slots, num_prbs], linear
-        self.sinr = 10.0 ** (self.snr_db / 10.0) * gain
+        self.sinr = 10.0 ** (reference / 10.0) * episode.gain
+        mean_sinr = self.sinr.double().mean(dim=(1, 2))
+        self.channel_info = episode.info | {
+            "realized_snr_db": (10.0 * torch.log10(mean_sinr)).tolist()
+        }
         self._ack_rng = torch.Generator(device=DEVICE).manual_seed(ack_seed)
         self.slot = 0
 
