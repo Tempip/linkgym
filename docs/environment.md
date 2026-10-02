@@ -24,6 +24,12 @@ own script.
 - The step that transmits the last slot returns `truncated=True`. `terminated` is always
   `False`. The environment is registered without `max_episode_steps`; it truncates itself.
 - Calling `step()` after the last slot raises `RuntimeError`.
+- With `channel="trace"`, `reset(seed=s, options={"trajectory": i, "offset": o})` pins the
+  episode to trajectory `i` of the trace file (its split must be in `trace_splits`),
+  starting at slot `o`. The SNR, the channel seed and the ACK draws come from `s` exactly
+  as without options; only the choice of trajectory and window is replaced. The same seed
+  and options give the same episode for every policy. See
+  [channels.md](channels.md#pinned-episodes).
 
 ## Timing
 

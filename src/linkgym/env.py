@@ -170,8 +170,10 @@ class LinkAdaptationEnv(gymnasium.Env):
     ) -> tuple[np.ndarray, dict[str, Any]]:
         super().reset(seed=seed)
         c = self.config
+        channel_options = self._channel_options(options)
         # All randomness derives from self.np_random: the SNR, then the simulator seed,
-        # from which the simulator derives the channel and ACK seeds.
+        # from which the simulator derives the channel and ACK seeds. A pinned episode
+        # makes the same draws; only the choice of trajectory and window is replaced.
         snr_db = None  # link budget: the channel source sets the SNR
         if c.snr_mode != "link_budget":
             if c.snr_db is None:
@@ -179,7 +181,7 @@ class LinkAdaptationEnv(gymnasium.Env):
             else:
                 snr_db = float(c.snr_db)
         sim_seed = int(self.np_random.integers(np.iinfo(np.int64).max))
-        self._sim.reset(sim_seed, snr_db=snr_db)
+        self._sim.reset(sim_seed, snr_db=snr_db, channel_options=channel_options)
         self.snr_db = self._episode_snr_db()
 
         # Wideband SINR per slot [dB], independent of the MCS
@@ -230,6 +232,19 @@ class LinkAdaptationEnv(gymnasium.Env):
             f"{'ACK ' if report['ack'] else 'NACK'} | {bits:6d} bits | "
             f"running TBLER {running_tbler:.3f}"
         )
+
+    def _channel_options(self, options: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Reset options pinning the trace trajectory and window, as channel options."""
+        if not options:
+            return None
+        unknown = sorted(set(options) - {"trajectory", "offset"})
+        if unknown:
+            raise ValueError(f"unknown reset options {unknown}; known: ['offset', 'trajectory']")
+        if self.config.channel != "trace":
+            raise ValueError("reset options 'trajectory' and 'offset' need channel='trace'")
+        if set(options) != {"trajectory", "offset"}:
+            raise ValueError("pin an episode with both 'trajectory' and 'offset'")
+        return {"trajectories": [options["trajectory"]], "offsets": [options["offset"]]}
 
     def close(self) -> None:
         """Release the channel source's resources, e.g. close the trace file."""

@@ -427,13 +427,32 @@ class TraceChannelSource:
         self._file = None
         self._file_pid = None
 
-    def generate(self, num_slots: int, batch_size: int, seed: int) -> ChannelEpisode:
+    def generate(
+        self,
+        num_slots: int,
+        batch_size: int,
+        seed: int,
+        *,
+        trajectories: list[int] | np.ndarray | None = None,
+        offsets: list[int] | np.ndarray | None = None,
+    ) -> ChannelEpisode:
+        """Gains of ``batch_size`` windows; random unless pinned.
+
+        :param trajectories: Pin the trajectory of each link ([batch_size] indices into the
+            file, with a split in ``splits``); requires ``offsets``
+        :param offsets: Pin the start slot of each link's window
+        """
         info = self.info
         if num_slots > info.num_slots:
             raise ValueError(f"episodes of {num_slots} slots exceed the {info.num_slots} slots")
         rng = np.random.default_rng(seed)
-        trajectories = rng.choice(self._eligible, size=batch_size)
-        offsets = rng.integers(0, info.num_slots - num_slots + 1, size=batch_size)
+        if (trajectories is None) != (offsets is None):
+            raise ValueError("pin both trajectories and offsets, or neither")
+        if trajectories is None:
+            trajectories = rng.choice(self._eligible, size=batch_size)
+            offsets = rng.integers(0, info.num_slots - num_slots + 1, size=batch_size)
+        else:
+            trajectories, offsets = self._check_pin(trajectories, offsets, num_slots, batch_size)
         dataset = self._gain_dataset()
         gain = np.stack(
             [dataset[t, o : o + num_slots] for t, o in zip(trajectories, offsets, strict=True)]
@@ -454,6 +473,25 @@ class TraceChannelSource:
             reference_snr_db=self.reference_snr_db,
             info=episode_info,
         )
+
+    def _check_pin(self, trajectories, offsets, num_slots: int, batch_size: int):
+        trajectories = np.asarray(trajectories)
+        offsets = np.asarray(offsets)
+        if trajectories.shape != (batch_size,) or offsets.shape != (batch_size,):
+            raise ValueError(f"pin one trajectory and one offset per link ({batch_size})")
+        if trajectories.dtype.kind not in "iu" or offsets.dtype.kind not in "iu":
+            raise ValueError("trajectories and offsets must be integers")
+        not_eligible = [int(t) for t in trajectories if t not in self._eligible]
+        if not_eligible:
+            raise ValueError(
+                f"trajectories {not_eligible} are not in the splits {list(self.splits)} "
+                f"of {self.info.path}"
+            )
+        last = self.info.num_slots - num_slots
+        bad = [int(o) for o in offsets if not 0 <= o <= last]
+        if bad:
+            raise ValueError(f"offsets {bad} outside [0, {last}] for episodes of {num_slots} slots")
+        return trajectories, offsets
 
     def close(self) -> None:
         """Close the file handle of this process, if one is open."""

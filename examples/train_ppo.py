@@ -1,21 +1,29 @@
 """Train PPO (Stable-Baselines3) on linkgym/LinkAdaptation-v0.
 
-The default scenario is used for training and validation. Training envs run in
-SubprocVecEnv workers (spawn), one torch thread each. A callback evaluates the
-deterministic policy on fixed validation seeds every --eval-freq steps (learning curve in
-eval_log.csv and TensorBoard). The output directory gets model.zip, run.json (config,
-versions, git commit, timing) and tensorboard/.
+The default scenario is used for training and validation; with --channel trace, the
+scenario reads a trace file (snr_mode "normalized", SNR drawn per episode as by default),
+trains on the --trace-splits trajectories and validates on every trajectory of
+--val-splits, cut into --val-windows non-overlapping windows (pinned episodes, see
+linkgym.evaluation.trace_episodes). Training envs run in SubprocVecEnv workers (spawn),
+one torch thread each. A callback evaluates the deterministic policy at the start, every
+--eval-freq steps and at the end (learning curve in eval_log.csv and TensorBoard). The
+output directory gets model.zip, run.json (config, versions, git commit, dataset hash,
+timing) and tensorboard/.
 
-Seeds: training env i of training seed s uses seed s * n_envs + i (must stay below 500),
-validation uses 500-509 and the held-out test seeds are 1000 and above.
+Seeds: training env i of training seed s uses seed s * n_envs + i (must stay below 500).
+TDL: validation uses seeds 500-509 and the held-out test seeds are 1000 and above. Trace:
+validation episode k uses seed --val-first-seed + k.
 
     python examples/train_ppo.py --gamma 0.9 --seed 0
+    python examples/train_ppo.py --gamma 0 --seed 0 --channel trace \\
+        --trace-path data/munich-v1.h5 --eval-freq 100000
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import platform
@@ -27,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 import gymnasium
+import numpy as np
 import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
@@ -35,10 +44,12 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from linkgym import ENV_ID, ScenarioConfig, evaluate
 from linkgym.baselines import SB3Policy
+from linkgym.evaluation import evaluate_episodes, trace_episodes
 
 VALIDATION_SEEDS = list(range(500, 510))
 FIRST_VALIDATION_SEED = 500
 FIRST_TEST_SEED = 1000
+HELD_OUT_SPLITS = ("val", "test")
 NET_ARCH = {"pi": [64, 64], "vf": [64, 64]}
 PACKAGES = ("linkgym", "sionna-no-rt", "torch", "gymnasium", "stable-baselines3", "numpy")
 REPO = Path(__file__).resolve().parents[1]
@@ -53,14 +64,20 @@ def make_env(**env_kwargs: Any) -> gymnasium.Env:
 
 
 class ValidationCallback(BaseCallback):
-    """Evaluates the deterministic policy on fixed seeds at the start, every ``eval_freq``
-    steps and at the end; logs to TensorBoard and to a CSV file."""
+    """Evaluates the deterministic policy on fixed seeds (or pinned trace episodes) at the
+    start, every ``eval_freq`` steps and at the end; logs to TensorBoard and to a CSV file."""
 
     def __init__(
-        self, seeds: list[int], eval_freq: int, env_kwargs: dict[str, Any], csv_path: Path
+        self,
+        seeds: list[int],
+        eval_freq: int,
+        env_kwargs: dict[str, Any],
+        csv_path: Path,
+        episodes: list[dict[str, Any]] | None = None,
     ) -> None:
         super().__init__()
         self.seeds = seeds
+        self.episodes = episodes
         self.eval_freq = eval_freq
         self.env_kwargs = env_kwargs
         self.csv_path = csv_path
@@ -70,7 +87,17 @@ class ValidationCallback(BaseCallback):
 
     def _evaluate(self) -> None:
         start = time.perf_counter()
-        result = evaluate(SB3Policy(self.model), self.env_kwargs, self.seeds, 1)
+        if self.episodes is None:
+            result = evaluate(SB3Policy(self.model), self.env_kwargs, self.seeds, 1)
+        else:
+            rows = evaluate_episodes(SB3Policy(self.model), self.env_kwargs, self.episodes)
+            result = {
+                key: {
+                    "mean": float(np.mean([r[key] for r in rows])),
+                    "std": float(np.std([r[key] for r in rows], ddof=1)) if len(rows) > 1 else 0.0,
+                }
+                for key in ("goodput_mbps", "observed_tbler", "mean_mcs")
+            }
         seconds = time.perf_counter() - start
         self.eval_seconds += seconds
         row = {
@@ -139,10 +166,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--episode-length", type=int, default=None, help="scenario override (quick tests only)"
     )
+    parser.add_argument("--channel", choices=("tdl", "trace"), default="tdl")
+    parser.add_argument("--trace-path", type=Path, default=None, help="trace file (trace)")
+    parser.add_argument("--trace-splits", nargs="+", default=["train"], help="training splits")
+    parser.add_argument("--val-splits", nargs="+", default=["val"], help="validation splits")
+    parser.add_argument("--val-windows", type=int, default=4, help="windows per val trajectory")
+    parser.add_argument("--val-first-seed", type=int, default=5000)
     args = parser.parse_args()
     if args.out_dir is None:
-        args.out_dir = REPO / "runs" / "m3" / f"gamma{args.gamma:g}_seed{args.seed}"
+        name = f"gamma{args.gamma:g}_seed{args.seed}"
+        if args.channel == "trace":
+            args.out_dir = REPO / "runs" / "v02" / f"munich_{name}"
+        else:
+            args.out_dir = REPO / "runs" / "m3" / name
     return args
+
+
+def sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def main() -> None:
@@ -151,6 +196,27 @@ def main() -> None:
     torch.set_num_threads(1)
 
     env_kwargs = {} if args.episode_length is None else {"episode_length": args.episode_length}
+    eval_kwargs, val_episodes, dataset = env_kwargs, None, None
+    if args.channel == "trace":
+        if args.trace_path is None:
+            raise SystemExit("--channel trace needs --trace-path")
+        held_out = sorted(set(args.trace_splits) & set(HELD_OUT_SPLITS))
+        if held_out:
+            raise SystemExit(f"training must not use the held-out splits {held_out}")
+        if set(args.val_splits) & set(args.trace_splits):
+            raise SystemExit("validation splits must not overlap the training splits")
+        trace_path = args.trace_path.resolve()
+        dataset = {"path": str(trace_path), "sha256": sha256(trace_path)}
+        trace_kwargs = {"channel": "trace", "trace_path": str(trace_path)}
+        env_kwargs = env_kwargs | trace_kwargs | {"trace_splits": tuple(args.trace_splits)}
+        eval_kwargs = env_kwargs | {"trace_splits": tuple(args.val_splits)}
+        val_episodes = trace_episodes(
+            trace_path,
+            args.val_splits,
+            episode_length=ScenarioConfig(**eval_kwargs).episode_length,
+            windows=args.val_windows,
+            first_seed=args.val_first_seed,
+        )
     first_env_seed = args.seed * args.n_envs
     train_env_seeds = list(range(first_env_seed, first_env_seed + args.n_envs))
     if train_env_seeds[-1] >= FIRST_VALIDATION_SEED:
@@ -183,7 +249,9 @@ def main() -> None:
     # training seeds; use disjoint seeds instead. They apply at the first reset in learn().
     model.get_env().seed(first_env_seed)
 
-    callback = ValidationCallback(args.eval_seeds, args.eval_freq, env_kwargs, eval_csv)
+    callback = ValidationCallback(
+        args.eval_seeds, args.eval_freq, eval_kwargs, eval_csv, val_episodes
+    )
     start = time.perf_counter()
     model.learn(total_timesteps=args.total_timesteps, callback=callback, tb_log_name="ppo")
     wall_seconds = time.perf_counter() - start
@@ -214,9 +282,13 @@ def main() -> None:
         "seeds": {
             "training_seed": args.seed,
             "train_env_seeds": train_env_seeds,
-            "validation_seeds": args.eval_seeds,
+            "validation_seeds": (
+                args.eval_seeds if val_episodes is None else [e["seed"] for e in val_episodes]
+            ),
             "first_test_seed": FIRST_TEST_SEED,
         },
+        "dataset": dataset,
+        "validation_episodes": None if val_episodes is None else len(val_episodes),
         "versions": {pkg: version(pkg) for pkg in PACKAGES} | {"python": platform.python_version()},
         "git": git_state(),
         "machine": {

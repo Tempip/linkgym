@@ -15,6 +15,7 @@ import contextlib
 import importlib.metadata
 from collections.abc import Iterator
 from dataclasses import dataclass, fields
+from typing import Any
 
 import numpy as np
 import torch
@@ -262,11 +263,19 @@ class LinkSimulator:
         self._source: ChannelSource = channel_source
         self.reset(seed)
 
-    def reset(self, seed: int, *, snr_db: float | None = None) -> None:
+    def reset(
+        self,
+        seed: int,
+        *,
+        snr_db: float | None = None,
+        channel_options: dict[str, Any] | None = None,
+    ) -> None:
         """Generate a new episode from ``seed`` and restart at slot 0.
 
         :param snr_db: New mean SNR [dB]; if `None`, the current ``snr_db`` is kept. Not
             used for episodes whose channel sets ``reference_snr_db``.
+        :param channel_options: Keyword arguments for the channel source's ``generate``,
+            e.g. ``trajectories`` and ``offsets`` of :class:`~linkgym.channels.TraceChannelSource`
         """
         if snr_db is not None:
             self.snr_db = snr_db
@@ -274,7 +283,9 @@ class LinkSimulator:
         channel_seed, ack_seed = (
             int(s) for s in np.random.SeedSequence(seed).generate_state(2, dtype=np.uint64)
         )
-        episode = self._source.generate(self.num_slots, self.batch_size, channel_seed)
+        episode = self._source.generate(
+            self.num_slots, self.batch_size, channel_seed, **(channel_options or {})
+        )
         expected = (self.batch_size, self.num_slots, self._source.num_prbs)
         if tuple(episode.gain.shape) != expected or episode.gain.dtype != torch.float32:
             raise ValueError(

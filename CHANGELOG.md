@@ -47,6 +47,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (ray-tracing non-convergence, dropped trajectories, an alternative test realization).
 - A clearer `ImportError` from `linkgym.sim` when Sionna fails to import because
   sionna-rt is installed in the same environment.
+- Pinned trace episodes: `env.reset(seed, options={"trajectory": i, "offset": o})`, with
+  `TraceChannelSource.generate(..., trajectories=, offsets=)` and
+  `LinkSimulator.reset(..., channel_options=)`; `linkgym.evaluation.trace_episodes`,
+  `evaluate_episodes` and `cluster_bootstrap` for enumerated evaluation.
+- `examples/train_ppo.py --channel trace`: training on the train split of a trace with
+  validation on pinned val episodes; the run records the dataset's SHA-256.
+- The v0.2 Munich experiment: protocol (`docs/results/v02/PROTOCOL.md`) and
+  `examples/evaluate_v02.py`.
 
 ### Changed
 

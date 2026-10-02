@@ -116,6 +116,26 @@ trace generator assigns the labels; for example, all trajectories of one street 
 same split, recorded in `group`. Seeds and splits are independent: train on
 `trace_splits=["train"]`, select on `["val"]` and report on `["test"]`.
 
+### Pinned episodes
+
+For evaluation, an episode can be pinned to a trajectory and window:
+`env.reset(seed=s, options={"trajectory": i, "offset": o})`, with `i` an index into the
+trace file whose split is in `trace_splits` and `0 <= o <= N - episode_length`. The reset
+makes the same random draws as an unpinned one (SNR, then the channel and ACK seeds); only
+the trajectory and window are replaced. With the same seeds and options, every policy
+faces the same channel, SNR and ACK draws. Invalid pins raise `ValueError`.
+
+`linkgym.evaluation` has helpers for enumerated evaluation:
+
+- `trace_episodes(path, splits, episode_length=1000, windows=None, first_seed=0)` lists
+  every trajectory of the splits cut into non-overlapping windows, episode k with reset
+  seed `first_seed + k`, with its route, rank within the route and category;
+- `evaluate_episodes(policy, env_kwargs, episodes)` runs a policy on such a list and
+  returns per-episode goodput, observed TBLER and mean MCS;
+- `cluster_bootstrap(a, b, clusters)` gives the mean paired difference `a - b` (or the
+  mean of `a`) with a bootstrap interval that resamples clusters, e.g. trajectories,
+  rather than episodes.
+
 `env.unwrapped.channel_info` describes the current episode: `trajectory`, `offset` (start
 slot), `split`, `group` and `category` (if the file has them) and `realized_snr_db`, the
 mean SNR of the episode's slots (10 log10 of the mean linear per-PRB SINR). With the TDL
