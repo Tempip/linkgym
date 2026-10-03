@@ -58,7 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Munich train streets against tuned OLLA, PPO trained on TDL and the other baselines on
   the held-out test streets, per route category and on both ray-tracing realizations.
 - Exploratory, post hoc analysis on the Munich val split of why tuned OLLA misses its TBLER
-  target (`examples/olla_val_analysis.py`, a section of `docs/results/v02/README.md`).
+  target (`examples/olla_val_analysis.py`, a section of `docs/results/v02/README.md`), and
+  a trace-only check of the test split (`examples/olla_test_traces.py`).
+- `docs/channels.md`: `snr_mode="normalized"` divides by the mean linear gain, so
+  trajectories with a large dynamic range produce outage stretches.
 
 ### Changed
 

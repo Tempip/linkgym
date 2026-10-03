@@ -160,6 +160,21 @@ trajectory, and `info["snr_db"]` reports it. The variation within the trajectory
 as the path loss changing along a street, is kept, so the mean SNR of a window differs
 from the scenario SNR; `channel_info["realized_snr_db"]` holds it.
 
+**The divisor is the mean linear gain, so strong stretches dominate it.** On a trajectory
+with a large dynamic range, the scenario SNR is set by its strongest part, and the rest of
+the trajectory can sit far below it. An example is a strong line of sight or reflection
+along one part and deep shadow along another. On the Munich val trajectory `nw-avenue` 4,
+the median slot lies 26 dB below the trajectory's mean, so at a scenario SNR of 5-20 dB
+most of it is between -21 and -6 dB. Such stretches are outages: not even MCS 3, the lowest
+MCS, reaches a 5 % TBLER there, and no policy can do better than lose almost every block.
+
+In the v0.2 experiment, these outage slots were 10 % of the val slots and 9 % of the test
+slots. They account for the tuned OLLA's observed TBLER above its target, as shown in the
+[exploratory analysis](results/v02/README.md#exploratory-analysis-post-hoc-validation-split).
+A trajectory's spread is visible before training: the gap between the median and the mean
+of its gain, or a low 10th percentile, signals outage stretches. A median-based
+normalization option is on the roadmap; it is not implemented.
+
 ### `snr_mode="link_budget"`
 
 The gains are used as they are, with the SNR at unit gain from a link budget:
@@ -184,6 +199,10 @@ reference SNR of 124.25 dB; a gain of -110 dB then means an SNR of 14.25 dB.
   its 20 dB value, so MCS 28 keeps its TBLER floor of 0.0215 and higher SINR brings
   nothing. The observation clips the wideband SINR to [-10, 40] dB. Below -5 dB, the
   BLER stays at its -5 dB value. See [benchmarks.md](benchmarks.md#known-limitations).
+- **Outage stretches with `normalized`.** Normalizing by the mean linear gain can put long
+  stretches of a trajectory with a large dynamic range below any usable SINR (see
+  [SNR modes](#snr-modes)); these slots raise every policy's observed
+  TBLER.
 - **Single link.** No interference and no noise other than thermal noise; the gain is
   that of one effective single-layer channel.
 - **Fixed grid.** The trace must have the scenario's PRB count, subcarrier spacing and

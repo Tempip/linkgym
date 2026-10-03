@@ -187,6 +187,9 @@ Full lists:
 Later:
 
 - PDSCH MCS table 2 (256-QAM, BLER data up to 25 dB).
+- A median-based normalization option for trace channels: the mean linear gain used now
+  lets a short strong stretch push the rest of a trajectory into outage
+  ([channels](https://github.com/Tempip/linkgym/blob/main/docs/channels.md#snr-modes)).
 
 ## Contributing
 

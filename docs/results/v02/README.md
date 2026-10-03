@@ -155,7 +155,8 @@ seeds agree within 0.3 Mbit/s.
   0.13 on test (0.15 on val). The reason was not investigated within the protocol
   (candidates: the step size against the level changes along a street, the BLER-table
   limits); a finer OLLA grid was not part of the protocol. A post hoc analysis on the val
-  split follows in [Exploratory analysis](#exploratory-analysis-post-hoc-validation-split).
+  split, and a trace-only check of the test split, follow in
+  [Exploratory analysis](#exploratory-analysis-post-hoc-validation-split).
 - **Secondary comparisons are uncorrected** for multiple testing.
 
 ## Exploratory analysis (post hoc, validation split)
@@ -313,19 +314,77 @@ tracking range.
 - **Munich**: the quarters are flat (0.144, 0.152, 0.160, 0.134). In the feasible slots,
   q1 is 0.057, then 0.047-0.050.
 
+### Trace-only check on the test split (post hoc)
+
+> **Also not part of the protocol.** Added after the val analysis above, which could not
+> explain the test NLoS streets: the NLoS val street has no infeasible slots. No policy was
+> evaluated and no result changed. Script:
+> [examples/olla_test_traces.py](../../../examples/olla_test_traces.py).
+
+**Method.**
+
+- **Episodes**: the protocol's 92 pinned test episodes (seeds 6000-6091), on both
+  realizations, at their drawn SNRs. Each episode reproduced the SNR of the protocol's run.
+- **Infeasible slots**: the environment was stepped with MCS 3 only, to get the PHY
+  abstraction's TBLER of MCS 3 in every slot. No ACKs or goodput were recorded. As on val, a
+  slot is infeasible if that TBLER is above 0.05.
+- **Gain spread**: per trajectory, the spread of the normalized wideband gain, read from
+  the trace.
+- **Comparison**: the tuned OLLA's published per-episode TBLERs, from the protocol's run
+  (`results/v02/test.json`), set against a model calibrated on val. The model has two
+  numbers, OLLA's TBLER in the feasible and in the infeasible val slots (0.051 and 0.994).
+  It predicts 0.051 x (1 - s) + 0.994 x s for a share s of infeasible slots.
+
+Main / alternative realization:
+
+| route (category, trajectories) | infeasible slots | tuned OLLA TBLER, published | val-calibrated model | OLLA TBLER, episodes without infeasible slots |
+|---|---|---|---|---|
+| south-street (LoS, 5) | 1.6% / 1.8% | 0.062 / 0.063 | 0.066 / 0.068 | 0.051 / 0.051 |
+| west-street (transition, 10) | 6.8% / 8.0% | 0.106 / 0.111 | 0.115 / 0.126 | 0.051 / 0.051 |
+| long-diagonal (NLoS, 7) | 11.1% / 9.6% | 0.148 / 0.136 | 0.155 / 0.142 | 0.052 / 0.053 |
+| south-curve (NLoS, 1) | 56.0% / 56.0% | 0.564 / 0.561 | 0.579 / 0.579 | 0.044 / 0.044 (1 of 4 episodes) |
+| both NLoS streets (8) | 16.7% / 15.4% | 0.200 / 0.189 | 0.208 / 0.196 | 0.052 / 0.053 |
+| all test (23) | 9.1% / 9.2% | 0.129 / 0.128 | 0.137 / 0.138 | 0.051 / 0.052 |
+
+![Exploratory, test traces: share of infeasible slots against the published OLLA TBLER, per episode](test_traces.png)
+
+**What the data supports: the infeasible slots account for the excess on the test split
+too, on the NLoS streets and overall.**
+
+- **Without infeasible slots, OLLA is on target.** In the test episodes with no
+  infeasible slot, its published TBLER is 0.051-0.053 on every street but south-curve,
+  which has only one such episode (0.044).
+- **On the NLoS streets**, the model predicts an excess over the 0.05 target of 0.158
+  (main realization); the published excess is 0.150. It slightly over-predicts on every
+  street, as expected: after an outage, OLLA's wound-up offset holds its TBLER near zero
+  (see wind-up, above).
+- **The gain spread is what predicts the infeasible slots:**
+  - In each realization, the 8 test trajectories whose 10th percentile of normalized
+    wideband gain lies within 5 dB of the mean have no infeasible slot.
+  - Every trajectory with more than 10% infeasible slots has its 10th percentile at least
+    15 dB below the mean (10 dB in the alternative realization).
+- **Where the NLoS infeasible slots are** (main realization):
+  - **south-curve**: the median slot sits 15.7 dB below the trajectory's mean and the
+    maximum 13.2 dB above. It holds 27% of all infeasible test slots.
+  - **long-diagonal trajectory 2**: median 12.3 dB below the mean, maximum 13.1 dB above,
+    33% of its slots infeasible.
+  - **long-diagonal trajectory 6**: the median is close to the mean, but 30% of its slots
+    lie more than 20 dB below it. 30% of its slots are infeasible.
+  - **long-diagonal trajectories 4 and 5**: their 10th percentile is within 3.2 dB of the
+    mean, they have no infeasible slots, and OLLA's TBLERs are 0.055 and 0.052.
+
+Per-trajectory and per-route numbers are in
+[test_traces_by_trajectory.csv](test_traces_by_trajectory.csv) and
+[test_traces_by_group.csv](test_traces_by_group.csv).
+
+This settles the question the val analysis left open. It changes no comparison above: the
+comparisons are paired, so every policy faced the same infeasible slots. One side
+observation: in the alternative realization, south-curve's deepest stretch lies 69 dB
+below its mean, against 27 dB in the main one. At any drawn SNR both are infeasible, so the
+share is the same.
+
 ### What this does not settle
 
-- **The test split.** The published per-route test TBLERs of tuned OLLA
-  ([per_route.csv](per_route.csv), not re-evaluated) are:
-  - south-street (LoS): 0.062;
-  - west-street (transition): 0.106;
-  - long-diagonal (NLoS, 7 trajectories): 0.148;
-  - south-curve (NLoS, one trajectory): 0.564.
-
-  The NLoS val street had no infeasible slots, so this analysis does not explain the
-  excess on the test NLoS streets, which is the largest part of the test excess. The same
-  mechanism is consistent with south-curve's 0.56, but it was not checked, because the
-  test split was not used.
 - **Q4 (untested).** From one slot to the next, the wideband SINR changes by 0.08 dB on
   average on Munich and 1.33 dB on TDL. The one-slot report delay therefore costs almost
   nothing on these traces. A policy trained on them never had to allow for a stale report,
@@ -368,6 +427,10 @@ no deviations.
   [olla_bias.csv](olla_bias.csv), [olla_summary.json](olla_summary.json),
   [olla_episode.png](olla_episode.png), [olla_outage_episode.png](olla_outage_episode.png),
   from `examples/olla_val_analysis.py`.
+- Exploratory (post hoc, trace-only check of the test split):
+  [test_traces_by_trajectory.csv](test_traces_by_trajectory.csv),
+  [test_traces_by_group.csv](test_traces_by_group.csv), [test_traces.png](test_traces.png),
+  from `examples/olla_test_traces.py`.
 
 Per-episode results are in `results/v02/` (not committed); `examples/evaluate_v02.py
 report` rebuilds these tables and figures from them.
