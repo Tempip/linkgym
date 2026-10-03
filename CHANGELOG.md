@@ -62,6 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a trace-only check of the test split (`examples/olla_test_traces.py`).
 - `docs/channels.md`: `snr_mode="normalized"` divides by the mean linear gain, so
   trajectories with a large dynamic range produce outage stretches.
+- `linkgym.datasets.fetch`: downloads a published dataset from its Zenodo version record
+  into a cache directory (`LINKGYM_DATA_DIR`) and verifies its size and SHA-256;
+  `python -m linkgym.datasets`.
 
 ### Changed
 
