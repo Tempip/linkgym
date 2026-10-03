@@ -19,8 +19,8 @@ def readme_python_blocks() -> list[str]:
     return python_blocks(REPO / "README.md")
 
 
-def test_readme_has_two_python_snippets():
-    assert len(readme_python_blocks()) == 2
+def test_readme_has_four_python_snippets():
+    assert len(readme_python_blocks()) == 4
 
 
 @pytest.mark.parametrize("index", [0, 1], ids=["evaluate_olla", "train_ppo"])
@@ -29,6 +29,25 @@ def test_readme_snippet_runs_verbatim(index):
         pytest.importorskip("stable_baselines3")
     code = readme_python_blocks()[index]
     exec(compile(code, f"README.md python block {index + 1}", "exec"), {"__name__": "__readme__"})
+
+
+def test_readme_dataset_snippet_runs_on_the_sample(monkeypatch):
+    # No network in tests: fetch returns the sample trace instead of downloading munich-v1
+    sample = REPO / "tests" / "data" / "munich_sample.h5"
+    monkeypatch.setattr("linkgym.datasets.fetch", lambda name, **kwargs: sample)
+    code = readme_python_blocks()[2]
+    namespace = {"__name__": "__readme__"}
+    exec(compile(code, "README.md python block 3", "exec"), namespace)
+    assert namespace["env"].unwrapped.channel_info["split"] == "train"
+    namespace["env"].close()
+
+
+def test_readme_own_channel_snippet_runs_verbatim(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)  # the snippet writes my_channel.h5
+    namespace = {"__name__": "__readme__"}
+    exec(compile(readme_python_blocks()[3], "README.md python block 4", "exec"), namespace)
+    namespace["env"].reset(seed=0)
+    namespace["env"].close()
 
 
 def test_bring_your_own_channel_snippet_runs_verbatim(tmp_path, monkeypatch):

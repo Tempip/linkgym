@@ -67,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `python -m linkgym.datasets`.
 - `docs/tutorial_rt.md`: from a Sionna RT scene to a trained and evaluated agent, step by
   step; its CPU steps run in the test suite.
+- README for v0.2: the Munich results next to the TDL ones, a header figure comparing both
+  (`docs/assets/make_assets.py`), the dataset and a bring-your-own-channel section.
 
 ### Changed
 
