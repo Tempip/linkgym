@@ -152,10 +152,191 @@ seeds agree within 0.3 Mbit/s.
 - **Normalized SNR only**: the absolute level along a street is removed per trajectory;
   the SNR is drawn per episode as in v0.1.
 - **OLLA misses its target.** The selected OLLA (target 0.05) reaches an observed TBLER of
-  0.13 on test (0.15 on val). The reason was not investigated (candidates: the step size
-  against the level changes along a street, the BLER-table limits); a finer OLLA grid was
-  not part of the protocol.
+  0.13 on test (0.15 on val). The reason was not investigated within the protocol
+  (candidates: the step size against the level changes along a street, the BLER-table
+  limits); a finer OLLA grid was not part of the protocol. A post hoc analysis on the val
+  split follows in [Exploratory analysis](#exploratory-analysis-post-hoc-validation-split).
 - **Secondary comparisons are uncorrected** for multiple testing.
+
+## Exploratory analysis (post hoc, validation split)
+
+> **Not part of the protocol.** This analysis was designed after the test results were
+> known, to explain one of them. It uses only the val split, and the test split was not
+> used again. Nothing in the sections above was changed. Script:
+> [examples/olla_val_analysis.py](../../../examples/olla_val_analysis.py).
+
+**Question.** On the Munich test split, the selected OLLA (target 0.05) has an observed
+TBLER of 0.13 (0.15 on val). On TDL, OLLA met its targets. Why the difference?
+
+**Method.**
+
+- **Episodes**:
+  - Munich: the protocol's 56 pinned val episodes (seeds 5000-5055, 14 trajectories).
+  - TDL: the default scenario on the M3 val seeds 500-509.
+- **Policies**:
+  - Munich: tuned OLLA (0.05, 0.25 dB), PPO-Munich training seed 0 and fixed MCS 3.
+  - TDL: OLLA with the same cell, the M3 tuned cell (0.1, 0.25 dB) and fixed MCS 3.
+- **Recorded per slot**:
+  - the MCS and the ACK;
+  - OLLA's offset;
+  - the wideband SINR, which the next slot's report carries;
+  - the EESM effective SINR of the transmitted MCS.
+- **Infeasible slot**: one where even MCS 3, the lowest MCS the environment offers, has a
+  TBLER above 0.05. In such a slot no MCS choice can meet the target. Sionna 2.1 has no
+  BLER tables for MCS 0-2, and whether those MCSs would serve some of these slots was not
+  measured.
+
+Observed TBLER by episode quarter (slots 0-249, ..., 750-999):
+
+| scenario, policy | TBLER | q1 | q2 | q3 | q4 | infeasible slots | TBLER in feasible slots |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Munich, tuned OLLA (0.05, 0.25 dB) | 0.147 | 0.144 | 0.152 | 0.160 | 0.134 | 10.2% | 0.051 |
+| Munich, PPO-Munich seed 0 | 0.129 | 0.120 | 0.136 | 0.143 | 0.117 | 10.2% | 0.030 |
+| TDL, OLLA (0.05, 0.25 dB) | 0.063 | 0.104 | 0.047 | 0.052 | 0.050 | 0.08% | 0.063 |
+| TDL, M3 tuned OLLA (0.1, 0.25 dB) | 0.110 | 0.144 | 0.096 | 0.100 | 0.101 | 0.08% | 0.110 |
+
+By route category, Munich val:
+
+| category (episodes) | infeasible slots | tuned OLLA | OLLA, feasible slots | PPO-Munich | PPO, feasible slots |
+|---|---:|---:|---:|---:|---:|
+| LoS (12) | 4.9% | 0.091 | 0.047 | 0.059 | 0.012 |
+| transition (24) | 21.5% | 0.254 | 0.050 | 0.228 | 0.017 |
+| NLoS (20) | 0% | 0.054 | 0.054 | 0.053 | 0.053 |
+
+The quarters per category, and the feasible-slot TBLER per quarter, are in
+[olla_analysis.csv](olla_analysis.csv).
+
+### What the data supports
+
+**1. On val, the excess TBLER comes from slots where no MCS can meet the target.**
+
+- **Where the NACKs are.** 10.2% of the Munich val slots are infeasible.
+  - Tuned OLLA loses 99.4% of its blocks there, and PPO-Munich 99.6%.
+  - These slots hold 69% of OLLA's NACKs and 79% of PPO-Munich's.
+- **OLLA is on target elsewhere.**
+  - In the feasible slots its TBLER is 0.051: 0.047 on LoS, 0.050 on transition and 0.054
+    on NLoS.
+  - In the 48 episodes with no infeasible slot, it is 0.052.
+  - PPO-Munich has no target; its TBLER in feasible slots is 0.030.
+- **Where the infeasible slots are.** They are concentrated, not spread across the
+  dataset:
+  - 8 of the 56 episodes, from three trajectories: nw-avenue trajectory 4 (3520 slots),
+    nw-avenue trajectory 5 (1630) and nw-diagonal trajectory 0 (587).
+  - 15 stretches, with a median length of 31 slots. Four episodes are infeasible from the
+    first slot to the last.
+  - Their wideband SINR has a median of -9.9 dB (10th percentile -17.9, 90th -5.9 dB),
+    against 11.6 dB in the feasible slots.
+- **Cause: the normalized SNR mode.** This mode divides each trajectory by its mean linear
+  gain over all its slots and PRBs. On a trajectory with a large dynamic range, a short
+  strong stretch sets that mean, and the rest of the trajectory falls far below the drawn
+  SNR. Spread of the normalized wideband gain, from the val traces alone, no policy:
+  - **nw-avenue trajectory 4**: the median slot sits 26 dB below the trajectory's mean,
+    88% of slots sit more than 20 dB below it, and the maximum is 14 dB above. With the
+    SNR drawn from 5-20 dB, most of this trajectory lies between -21 and -6 dB.
+  - **nw-avenue trajectory 5 and nw-diagonal trajectory 0**: the 10th percentile is 17 dB
+    and 11 dB below the mean.
+  - **The NLoS val street**: the 1st percentile is at most about 11 dB below the mean, and
+    it has no infeasible slots.
+  - **TDL**: the power delay profile is normalized, and only 0.08% of slots are
+    infeasible.
+
+On val, then, OLLA tracks its target wherever the target can be met. The miss comes from
+the channel set combined with the SNR normalization, not from a tracking failure.
+
+**2. Offset wind-up after an outage. This costs goodput, not TBLER.**
+
+- **Rise.** In an infeasible stretch, every NACK raises OLLA's offset by 0.25 dB, so it
+  reaches the +20 dB clamp after 80 slots.
+- **Unwind.** Each ACK lowers the offset by only 0.25 * 0.05/0.95 = 0.013 dB. Unwinding
+  20 dB therefore takes 1520 ACKs, longer than a 1000-slot episode.
+- **Feasible slots within 300 slots after an infeasible stretch** (795 slots):
+  - OLLA: mean offset 14.2 dB, mean MCS 3.3, TBLER 0.001;
+  - PPO-Munich, in the same slots: mean MCS 10.3, TBLER 0.033. It acts on the current
+    report.
+- **The other feasible slots of the same episodes** (1468 slots): OLLA's mean offset is
+  2.2 dB, mean MCS 13.5 and TBLER 0.042.
+
+Wind-up lowers OLLA's TBLER and its goodput, so it does not explain the miss. Whether it
+accounts for part of PPO-Munich's margin over OLLA was not measured.
+
+![Exploratory, val: tuned OLLA on an episode with an NLoS-to-LoS transition](olla_episode.png)
+
+**The requested LoS/NLoS episode**: nw-avenue trajectory 0, window 3 (seed 5023). It is the
+val episode with the most balanced line-of-sight share.
+- **Channel**: NLoS until slot 510, then LoS; SNR 18.8 dB; no infeasible slots.
+- **TBLER**: 0.057.
+- **Bias**: the wideband and effective SINR almost coincide in the NLoS part. In the LoS
+  part they separate as the SINR falls, reaching about 2.4 dB.
+- **OLLA**: the offset follows that bias from below with a lag, and the NACKs stay evenly
+  spread.
+
+![Exploratory, val: tuned OLLA through an infeasible stretch and after it](olla_outage_episode.png)
+
+**An outage and the wind-up**: nw-avenue trajectory 5, window 1 (seed 5041). It is the val
+episode with the longest infeasible stretch that ends before the episode does.
+- **Channel**: NLoS throughout; SNR 5.9 dB.
+- **During the outage**: for 630 slots the wideband SINR is about -11 dB. Every block is
+  lost by OLLA and by PPO-Munich alike, and OLLA's offset reaches +20 dB.
+- **After the outage**: the SINR comes back to about 3 dB, then 10 dB. OLLA stays at MCS 3
+  for the remaining 370 slots (offset still 15 dB at the end), while PPO-Munich follows the
+  SINR to MCS 7, then 16.
+
+### What the data does not support
+
+**3. Drift of the bias between the wideband report and the effective SINR.**
+
+The bias was measured as wideband SINR minus EESM effective SINR at MCS 14 (beta 5.66),
+which does not depend on the policy ([olla_bias.csv](olla_bias.csv)).
+
+- **Mean**: smaller on Munich than on TDL: 1.27 dB (LoS 0.53, transition 0.80, NLoS 2.27)
+  against 2.39 dB.
+- **Drift within an episode**: larger on Munich than on TDL.
+
+  | | Munich | TDL |
+  |---|---:|---:|
+  | std of the 100-slot block means [dB] | 0.49 | 0.15 |
+  | range of the block means [dB] | 1.49 | 0.50 |
+  | \|q4 - q1\| [dB] | 0.80 | 0.09 |
+
+- **OLLA keeps up with it.** OLLA's feasible-slot TBLER is on target in every category.
+  This includes NLoS, which drifts most (|q4 - q1| 0.96 dB), has no infeasible slots, and
+  has a TBLER of 0.054.
+
+At 0.25 dB per NACK, a drift of about 1 dB over hundreds of slots is within OLLA's
+tracking range.
+
+**4. A slow initial transient.**
+
+- **TDL**: OLLA starts from offset 0 against a bias of about 2.4 dB, so its first quarter
+  is high (0.104 at target 0.05, 0.144 at 0.1) and the later quarters are on target. That
+  first quarter is all of OLLA's excess on TDL.
+- **Munich**: the quarters are flat (0.144, 0.152, 0.160, 0.134). In the feasible slots,
+  q1 is 0.057, then 0.047-0.050.
+
+### What this does not settle
+
+- **The test split.** The published per-route test TBLERs of tuned OLLA
+  ([per_route.csv](per_route.csv), not re-evaluated) are:
+  - south-street (LoS): 0.062;
+  - west-street (transition): 0.106;
+  - long-diagonal (NLoS, 7 trajectories): 0.148;
+  - south-curve (NLoS, one trajectory): 0.564.
+
+  The NLoS val street had no infeasible slots, so this analysis does not explain the
+  excess on the test NLoS streets, which is the largest part of the test excess. The same
+  mechanism is consistent with south-curve's 0.56, but it was not checked, because the
+  test split was not used.
+- **Q4 (untested).** From one slot to the next, the wideband SINR changes by 0.08 dB on
+  average on Munich and 1.33 dB on TDL. The one-slot report delay therefore costs almost
+  nothing on these traces. A policy trained on them never had to allow for a stale report,
+  which is one candidate explanation for PPO-Munich's TBLER of 0.25 on TDL. It was not
+  tested.
+- **Not acted on.** In the normalized mode, the observed TBLER mixes how well a policy
+  tracks the channel with stretches that no MCS can serve. Two options for a later protocol:
+  - report the TBLER over feasible slots;
+  - normalize by a statistic that strong stretches affect less.
+
+  Neither was applied here.
 
 ## Setup and budget
 
@@ -183,6 +364,10 @@ no deviations.
 - Figures: [realizations.png](realizations.png),
   [goodput_by_category.png](goodput_by_category.png),
   [learning_curves.png](learning_curves.png).
+- Exploratory (post hoc, val only): [olla_analysis.csv](olla_analysis.csv),
+  [olla_bias.csv](olla_bias.csv), [olla_summary.json](olla_summary.json),
+  [olla_episode.png](olla_episode.png), [olla_outage_episode.png](olla_outage_episode.png),
+  from `examples/olla_val_analysis.py`.
 
 Per-episode results are in `results/v02/` (not committed); `examples/evaluate_v02.py
 report` rebuilds these tables and figures from them.

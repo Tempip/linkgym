@@ -57,6 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `examples/evaluate_v02.py` and the results (`docs/results/v02/README.md`): PPO trained on
   the Munich train streets against tuned OLLA, PPO trained on TDL and the other baselines on
   the held-out test streets, per route category and on both ray-tracing realizations.
+- Exploratory, post hoc analysis on the Munich val split of why tuned OLLA misses its TBLER
+  target (`examples/olla_val_analysis.py`, a section of `docs/results/v02/README.md`).
 
 ### Changed
 

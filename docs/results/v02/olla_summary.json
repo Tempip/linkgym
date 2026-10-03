@@ -1,0 +1,47 @@
+{
+ "infeasible_slot_share": 0.10244642857142858,
+ "infeasible_slots_by_trajectory": {
+  "nw-avenue trajectory 4": 3520,
+  "nw-avenue trajectory 5": 1630,
+  "nw-diagonal trajectory 0": 587
+ },
+ "episodes_with_infeasible_slots": 8,
+ "infeasible_stretches": 15,
+ "infeasible_stretch_median_slots": 31.0,
+ "infeasible_stretch_max_slots": 1000,
+ "infeasible_wideband_sinr_db_p10_p50_p90": [
+  -17.89485969543457,
+  -9.87791919708252,
+  -5.868695068359375
+ ],
+ "feasible_wideband_sinr_db_median": 11.56527042388916,
+ "olla_acks_to_unwind_20_db": 1519.9999999999998,
+ "OLLA tuned (0.05, 0.25 dB)": {
+  "tbler_episodes_without_infeasible_slots": 0.051854166666666666,
+  "feasible_slots_within_300_after_infeasible": {
+   "slots": 795,
+   "offset": 14.189901599644115,
+   "nack": 0.0012578616352201257,
+   "mcs": 3.3106918238993712
+  },
+  "other_feasible_slots_same_episodes": {
+   "slots": 1468,
+   "offset": 2.2302588992143098,
+   "nack": 0.04223433242506812,
+   "mcs": 13.535422343324251
+  }
+ },
+ "PPO-Munich seed 0": {
+  "tbler_episodes_without_infeasible_slots": 0.029583333333333333,
+  "feasible_slots_within_300_after_infeasible": {
+   "slots": 795,
+   "nack": 0.03270440251572327,
+   "mcs": 10.327044025157234
+  },
+  "other_feasible_slots_same_episodes": {
+   "slots": 1468,
+   "nack": 0.04495912806539509,
+   "mcs": 14.814713896457766
+  }
+ }
+}
