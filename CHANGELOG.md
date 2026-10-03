@@ -65,6 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `linkgym.datasets.fetch`: downloads a published dataset from its Zenodo version record
   into a cache directory (`LINKGYM_DATA_DIR`) and verifies its size and SHA-256;
   `python -m linkgym.datasets`.
+- `docs/tutorial_rt.md`: from a Sionna RT scene to a trained and evaluated agent, step by
+  step; its CPU steps run in the test suite.
 
 ### Changed
 

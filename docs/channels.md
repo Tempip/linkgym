@@ -215,7 +215,9 @@ reference SNR of 124.25 dB; a gain of -110 dB then means an SNR of 14.25 dB.
 The `linkgym-traces` command (also `python -m linkgym.rt`) computes traces with
 [Sionna RT](https://nvlabs.github.io/sionna/rt/) 2.1 from a scene, a transmitter and a set
 of receiver routes, all given in one JSON configuration file. It works with the built-in
-Sionna RT scenes (e.g. `munich`) and with your own Mitsuba 3 XML scene.
+Sionna RT scenes (e.g. `munich`) and with your own Mitsuba 3 XML scene. A step-by-step
+walk-through, from a scene to a trained and evaluated agent, is in
+[tutorial_rt.md](tutorial_rt.md).
 
 ### Installation
 
