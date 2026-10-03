@@ -399,7 +399,9 @@ GitHub's "Cite this repository" button uses
 
 The code is MIT licensed. See [LICENSE](https://github.com/Tempip/linkgym/blob/main/LICENSE).
 The Munich dataset is licensed under the Open Database License (ODbL) 1.0; it derives from
-OpenStreetMap data, (c) OpenStreetMap contributors.
+OpenStreetMap data, (c) OpenStreetMap contributors. The same applies to the small sample of
+it in `tests/data/munich_sample.h5`, and the route figure `docs/assets/munich_routes.png`
+shows OpenStreetMap-derived buildings.
 
 This project is not affiliated with or endorsed by NVIDIA. Sionna is a trademark of NVIDIA
 Corporation.

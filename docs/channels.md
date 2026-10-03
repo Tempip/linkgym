@@ -1,6 +1,6 @@
 # Channels
 
-Unreleased: available on main, will ship in v0.2.0.
+Since linkgym 0.2.0.
 
 The channel of an episode is a linear power gain |h|^2 per slot and per PRB. The
 simulator turns it into the per-PRB SINR

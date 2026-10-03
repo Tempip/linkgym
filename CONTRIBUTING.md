@@ -26,7 +26,15 @@ pytest -q -m "not slow"   # what CI runs
 pytest -q                 # everything, including slow tests (PPO training script, notebook)
 ```
 
-The full run, including the slow tests, takes about a minute on a desktop CPU.
+The full run, including the slow tests, takes about four minutes on a desktop CPU.
+
+The Sionna RT generator has GPU tests (marker `rt`), skipped without sionna-rt and a CUDA
+GPU. Run them in a separate environment with the `rt` extra (see
+[docs/channels.md](docs/channels.md#installation)):
+
+```bash
+pytest -q -m rt
+```
 
 ## Commits
 
@@ -36,6 +44,8 @@ changes to `CHANGELOG.md` under `[Unreleased]`.
 
 Results in `docs/results/` are produced by the scripts in `examples/`; if a change affects
 them, regenerate them with those scripts rather than editing the files by hand.
+
+Releases follow [RELEASING.md](RELEASING.md).
 
 ## Issues
 

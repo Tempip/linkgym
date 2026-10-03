@@ -1,0 +1,19 @@
+linkgym Munich ray-traced channel traces, v1
+Pedro Rodrigues, 2026. https://github.com/Tempip/linkgym
+
+This database is made available under the Open Database License (ODbL) 1.0:
+https://opendatacommons.org/licenses/odbl/1-0/ (full text in LICENSE).
+
+It is derived from the "munich" scene of Sionna RT (https://github.com/NVlabs/sionna-rt),
+which was built from OpenStreetMap data:
+(c) OpenStreetMap contributors, available under the ODbL,
+https://www.openstreetmap.org/copyright
+
+When you use this database, or publicly use a work produced from it, keep this
+attribution, for example:
+
+  Contains information from the linkgym Munich ray-traced channel traces v1, which is
+  made available under the Open Database License (ODbL), derived from OpenStreetMap
+  data, (c) OpenStreetMap contributors.
+
+A database adapted from this one must also be made available under the ODbL.

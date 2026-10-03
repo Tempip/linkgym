@@ -7,73 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-03
+
 ### Added
 
-- `linkgym.channels`: the `ChannelSource` interface and `ChannelEpisode`, a stable
-  extension point for channel models (linear power gain per slot and PRB, optional
-  reference SNR).
-- Trace-based channels: `TraceChannelSource` reads HDF5 trace files (format version 1,
-  `write_trace`/`read_trace`) with validation against the scenario, per-trajectory split
-  labels and seeded selection of trajectory and start slot.
-- SNR modes `normalized` (scenario SNR, unit mean gain per trajectory) and `link_budget`
-  (transmit power, thermal noise and noise figure, `link_budget_snr_db`).
-- Scenario fields `channel`, `trace_path`, `trace_splits`, `snr_mode`, `tx_power_dbm` and
-  `noise_figure_db`; the defaults keep the v0.1 TDL scenario.
-- `LinkAdaptationEnv.channel_info` and `LinkSimulator.channel_info`: trajectory, start
-  slot, split and realized mean SNR of the episode.
-- `docs/channels.md`: interface, trace format, SNR modes, limitations and a tested
-  bring-your-own-channel example.
-- Golden tests fixing the outputs of the TDL path (simulator, environment, tuned OLLA).
-- `h5py` as an explicit dependency.
-- Lazy trace loading: `TraceChannelSource` validates the file once without keeping its
-  gains in memory, reads only each episode's window and opens one read-only handle per
-  process, so subprocess vector environments share the file; `inspect_trace`,
-  `LinkAdaptationEnv.close` and `LinkSimulator.close`.
-- Optional trace datasets `los` (line-of-sight flag per path solve) and `category` (route
-  category `los`, `nlos` or `transition`, also in `channel_info`).
-- `linkgym.rt` and the `linkgym-traces` command (`generate`, `check`, `accuracy`, `plot`):
-  trace generation with Sionna RT from a JSON configuration (scene, transmitter, PRB grid,
-  routes with split, group and category, solver settings), with route checks against the
-  scene geometry, deterministic path solves at anchors with Doppler evolution in between,
-  dropping of trajectories without paths or below `min_mean_gain_db`, provenance
-  attributes, and `--routes`, `--splits` and `--solver KEY=VALUE` selections and overrides.
-  Optional extra `rt` (`sionna-rt==2.1.0`), to be installed in its own environment.
-- Munich dataset configuration (`examples/rt/munich.json`): one rooftop base station and
-  15 streets split by street into train, val and test (each with line-of-sight, NLoS and
-  transition data), refraction off; the route figure
-  `docs/assets/munich_routes.png`, a small sample trace in `tests/data/`, and
-  `examples/rt/make_sample.py` and `examples/rt/dataset_stats.py`. The dataset itself is
-  generated locally; `docs/channels.md` documents its statistics and known limitations
-  (ray-tracing non-convergence, dropped trajectories, an alternative test realization).
-- A clearer `ImportError` from `linkgym.sim` when Sionna fails to import because
-  sionna-rt is installed in the same environment.
-- Pinned trace episodes: `env.reset(seed, options={"trajectory": i, "offset": o})`, with
-  `TraceChannelSource.generate(..., trajectories=, offsets=)` and
-  `LinkSimulator.reset(..., channel_options=)`; `linkgym.evaluation.trace_episodes`,
-  `evaluate_episodes` and `cluster_bootstrap` for enumerated evaluation.
-- `examples/train_ppo.py --channel trace`: training on the train split of a trace with
-  validation on pinned val episodes; the run records the dataset's SHA-256.
-- The v0.2 Munich experiment: protocol (`docs/results/v02/PROTOCOL.md`),
-  `examples/evaluate_v02.py` and the results (`docs/results/v02/README.md`): PPO trained on
-  the Munich train streets against tuned OLLA, PPO trained on TDL and the other baselines on
-  the held-out test streets, per route category and on both ray-tracing realizations.
-- Exploratory, post hoc analysis on the Munich val split of why tuned OLLA misses its TBLER
-  target (`examples/olla_val_analysis.py`, a section of `docs/results/v02/README.md`), and
-  a trace-only check of the test split (`examples/olla_test_traces.py`).
-- `docs/channels.md`: `snr_mode="normalized"` divides by the mean linear gain, so
-  trajectories with a large dynamic range produce outage stretches.
-- `linkgym.datasets.fetch`: downloads a published dataset from its Zenodo version record
-  into a cache directory (`LINKGYM_DATA_DIR`) and verifies its size and SHA-256;
-  `python -m linkgym.datasets`.
-- `docs/tutorial_rt.md`: from a Sionna RT scene to a trained and evaluated agent, step by
-  step; its CPU steps run in the test suite.
-- README for v0.2: the Munich results next to the TDL ones, a header figure comparing both
-  (`docs/assets/make_assets.py`), the dataset and a bring-your-own-channel section.
+- **Trace channels.** `channel="trace"` runs the environment on an HDF5 channel trace
+  (trace format version 1: the linear power gain per trajectory, slot and PRB, with a
+  split label per trajectory). Each episode draws a trajectory of `trace_splits` and a
+  window of it. `write_trace`, `read_trace` and `inspect_trace` write, validate and
+  inspect traces; a trace is read lazily, one window per episode, and shared by
+  subprocess vector environments. Optional route categories (`los`, `transition`,
+  `nlos`) allow results by route type.
+- **SNR modes** for traces: `normalized` (the default: scenario SNR, each trajectory
+  scaled to unit mean gain) and `link_budget` (transmit power, thermal noise and noise
+  figure).
+- **`linkgym.channels.ChannelSource`**, a stable interface for channel models, used by the
+  TDL channel and the traces.
+- **Sionna RT trace generator**: the `linkgym-traces` command (`check`, `plot`, `generate`,
+  `accuracy`) computes traces from a JSON configuration (scene, transmitter, PRB grid,
+  routes split by street, path solver settings), with route checks against the scene
+  geometry, deterministic and byte-reproducible output, and provenance attributes. It
+  needs the new `rt` extra, to be installed in its own environment.
+- **Munich dataset**: ray-traced traces of 15 streets around one rooftop base station in
+  Sionna RT's `munich` scene, split by street into train, val and test, with a second
+  ray-tracing realization of the test streets. Published on Zenodo under the ODbL 1.0;
+  `linkgym.datasets.fetch("munich-v1")` downloads a file once, checks its size and SHA-256
+  and caches it (`LINKGYM_DATA_DIR`), also as `python -m linkgym.datasets`.
+- **Pinned evaluation episodes**: `env.reset(seed=..., options={"trajectory": i, "offset":
+  o})`. `linkgym.evaluation.trace_episodes` lists every trajectory of a split in fixed
+  windows, `evaluate_episodes` runs a policy on them and `cluster_bootstrap` gives
+  confidence intervals over trajectories.
+- `examples/train_ppo.py --channel trace`: PPO on the train split of a trace, with
+  validation on pinned val episodes and the trace's SHA-256 recorded.
+- **Results on ray-traced streets** (`docs/results/v02/`): PPO trained on TDL and on the
+  Munich train streets against a validation-tuned OLLA on held-out streets, under a
+  protocol fixed before training, by route category and on both ray-tracing realizations,
+  with a post hoc analysis of OLLA's TBLER (`examples/evaluate_v02.py`,
+  `examples/olla_val_analysis.py`, `examples/olla_test_traces.py`).
+- `LinkAdaptationEnv.channel_info` and `LinkSimulator.channel_info`: trajectory, window,
+  split, route category and realized mean SNR of the episode; `close()` on both.
+- Documentation: `docs/channels.md` (channel interface, trace format, SNR modes and the
+  outage stretches of `normalized`, the generator, the Munich dataset and its known
+  limitations, bringing your own channel) and `docs/tutorial_rt.md` (from a Sionna RT
+  scene to a trained and evaluated agent, with its CPU steps run by the tests).
+- `RELEASING.md`, and `examples/rt/package_zenodo.py` to build the dataset's Zenodo
+  package.
 
 ### Changed
 
-- `TDLChannelGain.generate` returns a `ChannelEpisode`; `LinkSimulator` takes an optional
-  `channel_source`. The TDL outputs are unchanged.
+- README: the results on TDL and on the Munich streets side by side, a new header figure,
+  the dataset, and how to bring your own channel or Sionna RT scene.
+- `TDLChannelGain.generate` returns a `ChannelEpisode`, and `LinkSimulator` takes an
+  optional `channel_source`. The TDL outputs are unchanged, which golden tests now check.
+- `linkgym.sim` raises a clearer `ImportError` when Sionna fails to import because
+  sionna-rt is installed in the same environment.
+- `h5py` is a dependency.
+- The publish workflow uses `actions/upload-artifact@v7` and
+  `actions/download-artifact@v8`, which run on Node.js 24.
 
 ### Removed
 
@@ -83,73 +73,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial project skeleton: packaging, license, CI, pre-commit and an import test.
-- Project URLs in `pyproject.toml`, CI and license badges in the README, and `.gitattributes`
-  enforcing LF line endings.
-- `linkgym.sim`: single-cell, single-user downlink link simulator on Sionna SYS 2.1
-  (TDL fading, EESM, PHYAbstraction) with seeded, batched links and oracle, ILLA, OLLA and
-  fixed-MCS policies.
-- `examples/baseline.py` and `examples/benchmark.py` for link adaptation baselines and CPU
-  speed measurements; results in `docs/benchmarks.md`.
-- Tests for reproducibility, instance isolation, Sionna RNG side effects and equivalence with
-  `PHYAbstraction`'s ACK and delivered bits.
 - Gymnasium environment `linkgym/LinkAdaptation-v0` (`LinkAdaptationEnv`), registered on
-  `import linkgym` and configured by `ScenarioConfig`: 26 MCS actions, delayed HARQ/SINR/MCS
-  reports as observation, normalized goodput reward, per-episode SNR draw.
-- `linkgym.baselines`: fixed MCS, ILLA, OLLA and oracle policies acting through the
-  environment, and an adapter for Stable-Baselines3 models.
-- `linkgym.evaluate` for goodput, observed TBLER and mean MCS across seeds.
-- `examples/run_baselines.py`, an environment speed section in `examples/benchmark.py`,
-  and `docs/environment.md`.
-- `examples/train_ppo.py`: PPO training on `LinkAdaptation-v0` with `SubprocVecEnv`, seeds
-  disjoint from validation (500-509) and test (1000+) seeds, a validation callback for
-  learning curves, TensorBoard logs and a `run.json` with config, versions and git commit.
-- `examples/evaluate_all.py`: M3 evaluation protocol with selection on validation seeds,
-  held-out test seeds, paired bootstrap comparisons against OLLA and a fixed-SNR grid.
-- `evaluate` returns per-episode results; `linkgym.evaluation.paired_bootstrap` for paired
-  differences with a percentile bootstrap confidence interval.
-- `slow` pytest marker; CI runs `pytest -m "not slow"`.
-- `docs/results/m3/`: M3 PPO results (gamma 0 and 0.9, 3 training seeds each) against OLLA,
-  ILLA, fixed MCS and the oracle, with tables, figures, interpretation and limitations.
-- `OLLAPolicy` takes a `delta_up` argument [dB], passed to Sionna's
-  `OuterLoopLinkAdaptation` (default 1.0, Sionna's).
-- Tuned OLLA baseline in `examples/evaluate_all.py`: TBLER target x `delta_up` grid on the
-  validation seeds, the best cell evaluated on the test seeds, in the fixed-SNR grid and in
-  the paired comparison with PPO. The M3 headline is now PPO vs tuned OLLA
-  (`docs/results/m3/olla_tuning.csv`).
-- `examples/quickstart.ipynb`: environment, rendering, an OLLA episode trace and an
-  evaluation of OLLA against a random policy.
-- `CONTRIBUTING.md` and `CITATION.cff`.
-- `docs/assets/header.png` (README figure) and `docs/assets/social_preview.png`
-  (1280 x 640), built from the M3 results by `docs/assets/make_assets.py`.
-- Tests that run the README code blocks verbatim and, marked slow, the quickstart notebook.
+  `import linkgym` and configured by `ScenarioConfig`: 26 MCS actions (PDSCH MCS table 1,
+  MCS 3-28), the delayed wideband SINR, HARQ ACK/NACK and MCS reports as observation, a
+  normalized goodput reward and a per-episode SNR draw.
+- `linkgym.sim`: a single-cell, single-user downlink link simulator on Sionna SYS 2.1 (TDL
+  fading, EESM, PHYAbstraction) with seeded, batched links.
+- `linkgym.baselines`: fixed-MCS, ILLA, OLLA (with Sionna's `delta_up` step as a parameter)
+  and oracle policies, and an adapter for Stable-Baselines3 models.
+- `linkgym.evaluate`: goodput, observed TBLER and mean MCS over seeds, with per-episode
+  results; `linkgym.evaluation.paired_bootstrap` for paired differences with bootstrap
+  confidence intervals.
+- `examples/train_ppo.py`: PPO training with Stable-Baselines3 on seeds disjoint from the
+  validation and test seeds, learning curves, TensorBoard logs and a `run.json` with
+  configuration, versions and git commit.
+- `examples/evaluate_all.py`: OLLA tuned on validation seeds, evaluation on held-out test
+  seeds, paired comparisons and a fixed-SNR grid. Results of PPO against tuned OLLA, ILLA,
+  fixed MCS and the oracle on the default TDL scenario in `docs/results/m3/`.
+- `examples/baseline.py`, `examples/run_baselines.py` and `examples/benchmark.py`
+  (baselines and speed, `docs/benchmarks.md`), and `examples/quickstart.ipynb`.
+- Documentation: README, `docs/environment.md`, `CONTRIBUTING.md` and `CITATION.cff`.
+- Optional extras `train` (Stable-Baselines3, TensorBoard), `dev` and `docs`.
 
-### Changed
-
-- README rewritten: header figure, motivation, installation, quickstart, results, environment
-  summary, reproduction commands with measured times, limitations, related work, citation.
-- `pyproject.toml`: singular description, keywords, classifiers, Documentation and
-  Changelog URLs for the PyPI page, an explicit sdist file list, and a `docs` extra
-  (`nbclient`, `ipykernel`) for the notebook test.
-- `LinkSimulator.reset` takes an optional `snr_db`; the channel source now returns |h|^2 and
-  the simulator applies the SNR. M1 results are bitwise unchanged.
-- `LinkResult` has a new `ack_uniform` field with the uniform draw behind each ACK.
-- CI installs the `train` extra so the Stable-Baselines3 environment check runs.
-- Pinned ruff to 0.16.9 in the `dev` extra to match the pre-commit hook version.
-- Set the author name in `pyproject.toml` to Pedro Rodrigues.
-- `tensorboard` added to the `train` extra.
-- `.gitignore` ignores `runs/` and `results/` only at the repository root, so
-  `docs/results/` can be committed.
-- `docs/benchmarks.md` describes ILLA as ILLA without outer loop, fed the raw wideband SINR
-  report, whose high TBLER is the bias OLLA corrects.
-- `examples/evaluate_all.py` colors the PPO models by gamma in the goodput-vs-TBLER figure
-  instead of labeling each point.
-
-### Fixed
-
-- `LinkAdaptationEnv` no longer raises on an unsupported `render_mode`; it warns, as
-  `gymnasium.make` does. Stable-Baselines3's `make_vec_env` passes
-  `render_mode="rgb_array"` by default.
-
-[Unreleased]: https://github.com/Tempip/linkgym/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Tempip/linkgym/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Tempip/linkgym/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Tempip/linkgym/releases/tag/v0.1.0
