@@ -78,6 +78,12 @@ def test_rt_tutorial_runs_verbatim(tmp_path, monkeypatch):
     assert namespace["diff"]["num_clusters"] == 1
 
 
+def test_phy_docs_example_runs_verbatim():
+    blocks = python_blocks(REPO / "docs" / "phy.md")
+    assert len(blocks) == 1
+    exec(compile(blocks[0], "docs/phy.md python block", "exec"), {"__name__": "__docs__"})
+
+
 @pytest.mark.slow
 # pyzmq warns about the Windows default event loop; it falls back to a selector thread
 @pytest.mark.filterwarnings("ignore:Proactor event loop:RuntimeWarning")

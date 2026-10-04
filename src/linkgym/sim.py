@@ -12,7 +12,6 @@ no HARQ retransmissions. All computation runs on the CPU in float32.
 from __future__ import annotations
 
 import contextlib
-import importlib.metadata
 from collections.abc import Iterator
 from dataclasses import dataclass, fields
 from typing import Any
@@ -20,35 +19,32 @@ from typing import Any
 import numpy as np
 import torch
 
+from linkgym.phy import (  # the link-level functions shared with linkgym.phy users
+    DEVICE,
+    MAX_MCS,
+    MCS_CATEGORY,
+    MCS_TABLE_INDEX,
+    MIN_MCS,
+    _sionna_import_error,
+    effective_sinr,
+    tb_size_per_mcs,
+)
+from linkgym.phy import transmit as phy_transmit
+
 try:
     from sionna.phy import config as sionna_config
     from sionna.phy.channel import cir_to_ofdm_channel, subcarrier_frequencies
     from sionna.phy.channel.tr38901 import TDL
     from sionna.phy.nr import CarrierConfig
-    from sionna.phy.nr.utils import MCSDecoderNR, TransportBlockNR
-    from sionna.sys import EESM, InnerLoopLinkAdaptation, OuterLoopLinkAdaptation, PHYAbstraction
+    from sionna.sys import InnerLoopLinkAdaptation, OuterLoopLinkAdaptation, PHYAbstraction
 except ImportError as error:
-    try:
-        importlib.metadata.version("sionna-rt")
-    except importlib.metadata.PackageNotFoundError:
-        raise error from None
-    # sionna-rt's sionna/__init__.py replaces sionna-no-rt's and imports Sionna RT, which
-    # needs a CUDA GPU or LLVM, on every `import sionna`
-    raise ImportError(
-        f"Importing Sionna failed: {error}. Sionna RT (sionna-rt, installed by the "
-        "linkgym[rt] extra) is installed in this environment; it makes every `import sionna` "
-        "import Sionna RT, which needs a CUDA GPU or LLVM. Install linkgym[rt] in its own "
-        "environment for trace generation and train in an environment without it "
-        "(docs/channels.md)."
-    ) from error
+    hint = _sionna_import_error(error)
+    if hint is None:
+        raise
+    raise hint from error
 
 from linkgym.channels import ChannelEpisode, ChannelSource
 
-DEVICE = "cpu"
-MCS_CATEGORY = 1  # PDSCH
-MCS_TABLE_INDEX = 1
-MIN_MCS = 3  # Sionna 2.1 ships no BLER data for PDSCH table 1, MCS 0-2
-MAX_MCS = 28
 POLICIES = ("oracle", "illa", "olla", "fixed")
 
 
@@ -146,16 +142,6 @@ def sinr_grid(sinr_prb: torch.Tensor, num_data_symbols: int) -> torch.Tensor:
     return per_subcarrier[:, None, :, None, None].expand(-1, num_data_symbols, -1, 1, 1)
 
 
-def tb_size_per_mcs(num_allocated_re: int) -> torch.Tensor:
-    """Transport block information bits for every MCS index 0-28, shape [29]."""
-    mcs = torch.arange(MAX_MCS + 1, dtype=torch.int32)
-    modulation_order, coderate = MCSDecoderNR(device=DEVICE)(mcs, MCS_TABLE_INDEX, MCS_CATEGORY)
-    tb_size, _, _ = TransportBlockNR(device=DEVICE).transport_block_size(
-        modulation_order, coderate, modulation_order * num_allocated_re
-    )
-    return tb_size
-
-
 def transmit(
     phy: PHYAbstraction,
     tb_size: torch.Tensor,
@@ -166,27 +152,18 @@ def transmit(
 ) -> LinkResult:
     """Transmit one transport block per link, drawing the ACK from the uniforms ``u``.
 
-    ``tbler`` and ``cb_bler`` come from PHYAbstraction. The ACK rule ``u >= tbler`` is
-    the one PHYAbstraction applies to its own draw (phy_abstraction.py:680-684), so with
-    the same ``u`` both give the same ACK and the same delivered bits.
+    The simulator's form of :func:`linkgym.phy.transmit`, which does the work: ``tbler``
+    and ``cb_bler`` come from PHYAbstraction and the ACK is ``u >= tbler``.
 
     :param tb_size: TB size per MCS index, from :func:`tb_size_per_mcs`
     :param mcs: [B] MCS index per link
     :param sinr_eff: [B] linear effective SINR per link
     :param u: [B] uniform draws in [0, 1)
     """
-    num_re = torch.full((mcs.shape[0], 1), num_allocated_re, dtype=torch.int32)
-    *_, tbler, cb_bler = phy(
-        mcs[:, None],
-        sinr_eff=sinr_eff[:, None],
-        num_allocated_re=num_re,
-        mcs_table_index=MCS_TABLE_INDEX,
-        mcs_category=MCS_CATEGORY,
+    t = phy_transmit(
+        sinr_eff, mcs, u, num_allocated_re=num_allocated_re, phy_abstraction=phy, tb_size=tb_size
     )
-    tbler, cb_bler = tbler[:, 0], cb_bler[:, 0]
-    ack = u >= tbler
-    decoded_bits = torch.where(ack, tb_size[mcs], 0)
-    return LinkResult(mcs, sinr_eff, ack, decoded_bits, tbler, cb_bler, u)
+    return LinkResult(mcs, sinr_eff, t.ack, t.bits, t.tbler, t.cb_bler, u)
 
 
 class LinkSimulator:
@@ -244,7 +221,6 @@ class LinkSimulator:
         if phy_abstraction is None:
             phy_abstraction = PHYAbstraction(device=DEVICE)
         self.phy_abstraction = phy_abstraction
-        self._eesm = EESM(device=DEVICE)
         self._tb_size = tb_size_per_mcs(self.num_allocated_re)
         if channel_source is None:
             channel_source = TDLChannelGain(
@@ -318,9 +294,7 @@ class LinkSimulator:
         if ((mcs < MIN_MCS) | (mcs > MAX_MCS)).any():
             raise ValueError(f"MCS must be in [{MIN_MCS}, {MAX_MCS}]")
 
-        # [B, 1 symbol, num_prbs, 1 user, 1 stream] -> [B]
-        sinr = self.sinr[:, self.slot, None, :, None, None]
-        sinr_eff = self._eesm(sinr, mcs[:, None], MCS_TABLE_INDEX, MCS_CATEGORY)[:, 0]
+        sinr_eff = effective_sinr(self.sinr[:, self.slot], mcs)
         u = torch.rand(self.batch_size, generator=self._ack_rng)
         result = transmit(
             self.phy_abstraction, self._tb_size, mcs, sinr_eff, self.num_allocated_re, u

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Golden tests for the trace channel path: `TraceChannelSource` episodes (normalized and
   link budget, random and pinned), a full environment episode with OLLA on the sample
   trace, and the bytes written by `write_trace`, recorded with 0.2.0.
+- `linkgym.phy`, a stable public link-level API: `tb_size_per_mcs`, `effective_sinr`
+  (EESM), `transmit(sinr_eff, mcs, u, *, num_allocated_re)` returning ACK, delivered bits
+  and TBLER from uniforms the caller provides, and `MIN_MCS`/`MAX_MCS`. The simulator now
+  uses these functions; its outputs are unchanged (golden tests). `docs/phy.md`.
 
 ## [0.2.0] - 2026-10-03
 
