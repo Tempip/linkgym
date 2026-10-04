@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Golden tests for the trace channel path: `TraceChannelSource` episodes (normalized and
+  link budget, random and pinned), a full environment episode with OLLA on the sample
+  trace, and the bytes written by `write_trace`, recorded with 0.2.0.
+
 ## [0.2.0] - 2026-10-03
 
 ### Added
