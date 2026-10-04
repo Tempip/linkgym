@@ -1,6 +1,6 @@
 # Antenna arrays and beams: `linkgym.beams`
 
-Unreleased: available on main, will ship in v0.3.0.
+Since 0.3.0.
 
 Status: **experimental** (see [api_stability.md](api_stability.md)): the names and
 conventions may still change in 0.4.

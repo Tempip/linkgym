@@ -4,21 +4,15 @@ title: "linkgym: A Gymnasium environment for 5G NR link adaptation"
 abstract: >-
   linkgym is a Gymnasium environment for 5G NR link adaptation (MCS selection) built on
   NVIDIA Sionna SYS, with TDL and ray-traced channels, classical baselines and a fixed
-  evaluation protocol. It includes a Sionna RT trace generator and a published ray-traced
-  dataset of Munich streets.
+  evaluation protocol. It includes a Sionna RT trace generator, a published ray-traced
+  dataset of Munich streets, a link-level API and antenna-array utilities.
 type: software
 authors:
   - family-names: Rodrigues Souza
     given-names: Pedro José
-version: 0.2.0
-date-released: 2026-10-03
+version: 0.3.0
+date-released: 2026-10-04
 doi: 10.5281/zenodo.23135621
-identifiers:
-  - type: doi
-    value: 10.5281/zenodo.23135622
-    description: >-
-      The version DOI for version 0.2.0, which has a relation childOf with the concept DOI
-      specified in the doi key in the root of this file.
 repository-code: "https://github.com/Tempip/linkgym"
 url: "https://github.com/Tempip/linkgym"
 license: MIT

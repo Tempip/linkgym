@@ -1,6 +1,6 @@
 # Link-level API: `linkgym.phy`
 
-Unreleased: available on main, will ship in v0.3.0.
+Since 0.3.0.
 
 Status: **stable** (see [api_stability.md](api_stability.md)).
 

@@ -192,7 +192,7 @@ used. `info["snr_db"]` is the realized mean SNR of the episode.
 For example, 30 dBm over 52 PRBs at 30 kHz (18.72 MHz) with a 7 dB noise figure gives a
 reference SNR of 124.25 dB; a gain of -110 dB then means an SNR of 14.25 dB.
 
-**Choosing the transmit power.** *Unreleased: available on main, will ship in v0.3.0.*
+**Choosing the transmit power.** *Since 0.3.0.*
 
 `linkgym.channels.tx_power_for_median_snr(trace, splits, target_snr_db, noise_figure_db)`
 returns the transmit power that puts the median per-slot wideband SNR at

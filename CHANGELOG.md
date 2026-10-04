@@ -7,36 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-04
+
 ### Added
 
-- Golden tests for the trace channel path: `TraceChannelSource` episodes (normalized and
-  link budget, random and pinned), a full environment episode with OLLA on the sample
-  trace, and the bytes written by `write_trace`, recorded with 0.2.0.
-- `linkgym.phy`, a stable public link-level API: `tb_size_per_mcs`, `effective_sinr`
-  (EESM), `transmit(sinr_eff, mcs, u, *, num_allocated_re)` returning ACK, delivered bits
-  and TBLER from uniforms the caller provides, and `MIN_MCS`/`MAX_MCS`. The simulator now
-  uses these functions; its outputs are unchanged (golden tests). `docs/phy.md`.
-- `linkgym.beams` (experimental): `dft_codebook` for ULA and UPA arrays with oversampling
-  (Sionna PHY's grids of beams, with the direction of each beam), `steering_vector`,
-  `beam_gain` (|w^H h|^2), `rsrp_dbm` and `best_beam`, with the element order and phase
-  convention of Sionna RT's `PlanarArray` and synthetic arrays. `docs/beams.md`.
-- `linkgym.channels.tx_power_for_median_snr`: the transmit power that puts the median
-  per-slot wideband SNR of a trace's splits at a target, for `snr_mode="link_budget"`
-  inside the range of the BLER tables while keeping the power differences between
-  trajectories; to be computed on the train split only.
-- `docs/api_stability.md`: which parts of linkgym are stable, experimental or internal, and
-  what patch and minor releases may change; each module's docstring states its status,
-  and `tests/test_public_api.py` snapshots the public names (`__all__`) of `linkgym`,
-  `linkgym.phy`, `linkgym.beams`, `linkgym.channels`, `linkgym.evaluation` and
-  `linkgym.datasets`.
+- **`linkgym.phy`**, a stable link-level API with the functions the environment's
+  simulator uses:
+  - `effective_sinr` (EESM) and `tb_size_per_mcs`;
+  - `transmit(sinr_eff, mcs, u, *, num_allocated_re)`, which returns the ACK, delivered
+    bits and TBLER of one transport block per link from uniforms you provide (common
+    random numbers);
+  - `MIN_MCS` and `MAX_MCS`.
+
+  See `docs/phy.md`.
+- **`linkgym.beams`** (experimental): DFT codebooks for linear and planar arrays, with
+  oversampling and the direction of each beam; steering vectors; beam gain |w^H h|^2;
+  RSRP; and the best beam. They use the element order and phase convention of Sionna RT's
+  `PlanarArray` and synthetic arrays. See `docs/beams.md`.
+- **`linkgym.channels.tx_power_for_median_snr`**: the transmit power that puts a trace's
+  median per-slot wideband SNR at a target. With it, `snr_mode="link_budget"` stays within
+  the range of the BLER tables while keeping the real power differences between
+  trajectories. Compute it on the train split.
+- **An API stability policy** (`docs/api_stability.md`): which parts of linkgym are
+  stable, experimental or internal, and what patch and minor releases may change. Each
+  module's docstring states its status, and a test checks the public names of the main
+  modules.
 
 ### Changed
 
-- README roadmap: 0.4 trace format 2 with ray-traced paths, the reconstruction and a Munich
-  paths dataset; 0.5 beam-gain cache and multi-user sampling; 0.6 (optional) FR2 dataset
-  and/or a CDL-based multi-antenna source.
+- The simulator's link-level code moved to `linkgym.phy`; `linkgym.sim` keeps its names.
+  The outputs of the environment and the simulator are unchanged, checked by golden tests
+  that now also cover the trace channel path.
 - `linkgym.channels`, `linkgym.evaluation` and `linkgym.datasets` define `__all__`, so
-  `from ... import *` now imports only their public names.
+  `from ... import *` imports only their public names.
+- README: the new modules, the stability policy, and the roadmap to 0.6 (a multi-antenna
+  trace format with a Munich paths dataset, beam-gain caches and multi-user sampling, an
+  FR2 dataset).
 
 ## [0.2.0] - 2026-10-03
 
@@ -126,6 +132,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation: README, `docs/environment.md`, `CONTRIBUTING.md` and `CITATION.cff`.
 - Optional extras `train` (Stable-Baselines3, TensorBoard), `dev` and `docs`.
 
-[Unreleased]: https://github.com/Tempip/linkgym/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Tempip/linkgym/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Tempip/linkgym/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Tempip/linkgym/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Tempip/linkgym/releases/tag/v0.1.0

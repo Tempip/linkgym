@@ -1,6 +1,6 @@
 # API stability
 
-Unreleased: available on main, will ship in v0.3.0.
+Since 0.3.0.
 
 This page is for projects that depend on linkgym and pin its version. It says which parts
 of linkgym are stable, which are experimental, and what each kind of release may change.

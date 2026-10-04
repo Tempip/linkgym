@@ -228,6 +228,22 @@ scene to a trained and evaluated agent, step by step;
 [docs/channels.md](https://github.com/Tempip/linkgym/blob/main/docs/channels.md) documents
 the trace format, the SNR modes and the generator.
 
+## Building blocks for your own environment
+
+Two modules can be used outside `LinkAdaptation-v0`, for example in a multi-user or
+beam-management environment of your own:
+
+- **`linkgym.phy`** (stable): the link-level functions the environment's simulator uses.
+  `effective_sinr` gives the EESM effective SINR. `transmit` gives the ACK, delivered bits
+  and TBLER of a transport block, from uniforms you provide, so different policies face the
+  same draws. See [docs/phy.md](https://github.com/Tempip/linkgym/blob/main/docs/phy.md).
+- **`linkgym.beams`** (experimental): DFT codebooks for linear and planar arrays, steering
+  vectors, beam gain, RSRP and best beam, consistent with Sionna RT's arrays. See
+  [docs/beams.md](https://github.com/Tempip/linkgym/blob/main/docs/beams.md).
+
+Which parts of linkgym are stable, and what a patch or minor release may change, is set
+out in [docs/api_stability.md](https://github.com/Tempip/linkgym/blob/main/docs/api_stability.md).
+
 ## Environment at a glance
 
 | | `linkgym/LinkAdaptation-v0` |
@@ -336,12 +352,10 @@ Full lists:
 
 ## Roadmap
 
-Multi-antenna channels and beam management, one small release at a time; the published
-results stay unchanged.
+Multi-antenna channels and beam management, one small release at a time, on top of the
+building blocks released in 0.3 (`linkgym.phy`, `linkgym.beams`); the published results
+stay unchanged.
 
-- **0.3** (in progress on main): a stable public link-level API (`linkgym.phy`), DFT
-  codebooks, beam gain and RSRP utilities (`linkgym.beams`), a helper to choose the
-  transmit power of link-budget traces, and a written API stability policy.
 - **0.4**: trace format 2, which stores the ray-traced paths at the anchors, so that the
   per-antenna channel can be rebuilt for any array and codebook. It comes with the
   generator option to write it, the reconstruction, an `ArrayChannelSource` interface, and
@@ -394,8 +408,7 @@ If you use linkgym, please cite it:
   author  = {Rodrigues Souza, Pedro José},
   title   = {linkgym: A Gymnasium environment for 5G NR link adaptation},
   year    = {2026},
-  version = {0.2.0},
-  doi     = {10.5281/zenodo.23135622},
+  version = {0.3.0},
   url     = {https://github.com/Tempip/linkgym}
 }
 ```
