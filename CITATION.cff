@@ -12,6 +12,13 @@ authors:
     given-names: Pedro José
 version: 0.2.0
 date-released: 2026-10-03
+doi: 10.5281/zenodo.23135621
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23135622
+    description: >-
+      The version DOI for version 0.2.0, which has a relation childOf with the concept DOI
+      specified in the doi key in the root of this file.
 repository-code: "https://github.com/Tempip/linkgym"
 url: "https://github.com/Tempip/linkgym"
 license: MIT
@@ -24,7 +31,7 @@ keywords:
   - Sionna
   - ray tracing
 references:
-  - type: dataset
+  - type: data
     title: "linkgym Munich ray-traced channel traces, v1"
     authors:
       - family-names: Rodrigues Souza

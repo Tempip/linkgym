@@ -72,7 +72,10 @@ The Munich v1 files are published as one Zenodo record: record 23135098, version
    `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD` and update the links at the bottom;
    `version` and `date-released` in `CITATION.cff`; the version in the README's BibTeX.
    The dates are those of the release-prep commit: if the tag is created on a later day,
-   update them first.
+   update them first. In `CITATION.cff`, remove the previous release's version DOI from
+   `identifiers` (keep the concept DOI in `doi`): the new one exists only after the release.
+   Keep `CITATION.cff` valid (`cffconvert --validate`): if Zenodo cannot parse it, it
+   archives nothing.
 2. **No placeholders left:** `grep -rn XXXXXXX README.md docs src CITATION.cff` finds
    nothing (the dataset record must be published first, see above).
 3. **Checks:**
@@ -102,5 +105,7 @@ The Munich v1 files are published as one Zenodo record: record 23135098, version
 8. **Verify:** the PyPI page shows X.Y.Z and renders the README; `pip install
    linkgym==X.Y.Z` works in a fresh environment; the Zenodo software record exists with the
    metadata from `CITATION.cff`.
-9. **Afterwards:** add a new empty `[Unreleased]` section to the CHANGELOG if it is
-   missing.
+9. **Afterwards:** add the version DOI that Zenodo minted for the release to
+   `identifiers` in `CITATION.cff` (the concept DOI of the software is
+   `10.5281/zenodo.23135621`), and a new empty `[Unreleased]` section to the CHANGELOG if it
+   is missing.

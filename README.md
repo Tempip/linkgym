@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Tempip/linkgym/blob/main/LICENSE)
 [![Python 3.11 | 3.12](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://github.com/Tempip/linkgym/blob/main/pyproject.toml)
 [![PyPI](https://img.shields.io/pypi/v/linkgym.svg)](https://pypi.org/project/linkgym/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23135621.svg)](https://doi.org/10.5281/zenodo.23135621)
 
 linkgym is a Gymnasium environment for 5G NR link adaptation (MCS selection) built on NVIDIA
 Sionna SYS, with TDL and ray-traced channels, classical baselines and a fixed evaluation
