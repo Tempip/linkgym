@@ -398,8 +398,9 @@ Open Database License (ODbL). The attribution is stored in every trace file.
 (`max_num_paths_per_src`); `seed` 42, deterministic. Trajectories whose mean gain is below
 -150 dB (`min_mean_gain_db`) are dropped.
 
-**Downloading it.** Both files are published on Zenodo under the ODbL, DOI
-[10.5281/zenodo.23135098](https://doi.org/10.5281/zenodo.23135098).
+**Downloading it.** Both files are published on Zenodo under the ODbL: version v1, DOI
+[10.5281/zenodo.23135098](https://doi.org/10.5281/zenodo.23135098) (all versions, resolving
+to the latest: [10.5281/zenodo.23135097](https://doi.org/10.5281/zenodo.23135097)).
 `linkgym.datasets.fetch` downloads a file once, checks its SHA-256 and returns its path:
 
 ```

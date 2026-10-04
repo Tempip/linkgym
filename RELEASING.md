@@ -31,12 +31,16 @@ release on Zenodo.
 
 ## Dataset release (only when the data changes)
 
-The Munich v1 files are published as one Zenodo record.
+The Munich v1 files are published as one Zenodo record: record 23135098, version DOI
+`10.5281/zenodo.23135098`; concept DOI (all versions) `10.5281/zenodo.23135097`.
 
 - Files of a published Zenodo version never change. A new dataset version is a new
   version record with its own version DOI, and a new name in `linkgym.datasets.DATASETS`
   (e.g. `munich-v2`). Never change the record, file name or SHA-256 behind an existing
   name.
+- Create a new version with "New version" on the published record, not with a new
+  upload: it then shares the concept DOI `10.5281/zenodo.23135097`. Steps 2-5 below apply
+  to it, with a new record number.
 - `fetch` points to the files of the version record. The concept DOI (all versions,
   resolves to the latest) is for "latest version" references only.
 

@@ -169,10 +169,11 @@ per-route results, both realizations and the analysis:
 Ray-traced channel traces of 15 streets around one rooftop base station in Sionna RT's
 `munich` scene: 76 trajectories of 4000 slots (2 s at 15 m/s), 52 PRBs at 3.5 GHz, split
 by street into train, val and test, plus a second ray-tracing realization of the test
-streets. Published on Zenodo, DOI
-[10.5281/zenodo.23135098](https://doi.org/10.5281/zenodo.23135098), under the Open Database
-License (ODbL) 1.0; the scene derives from OpenStreetMap data, (c) OpenStreetMap
-contributors.
+streets. Published on Zenodo under the Open Database License (ODbL) 1.0: version v1 has
+the DOI [10.5281/zenodo.23135098](https://doi.org/10.5281/zenodo.23135098), which is the one
+to cite and the one `fetch` downloads; all versions, resolving to the latest, are under
+[10.5281/zenodo.23135097](https://doi.org/10.5281/zenodo.23135097). The scene derives from
+OpenStreetMap data, (c) OpenStreetMap contributors.
 
 `linkgym.datasets.fetch` downloads a file once, verifies its SHA-256 and returns its path:
 
