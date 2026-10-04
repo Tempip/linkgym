@@ -78,6 +78,14 @@ def test_rt_tutorial_runs_verbatim(tmp_path, monkeypatch):
     assert namespace["diff"]["num_clusters"] == 1
 
 
+def test_beams_docs_example_runs_verbatim():
+    blocks = python_blocks(REPO / "docs" / "beams.md")
+    assert len(blocks) == 1
+    namespace = {"__name__": "__docs__"}
+    exec(compile(blocks[0], "docs/beams.md python block", "exec"), namespace)
+    assert (round(float(namespace["codebook"].v[namespace["best"]]), 6)) == 0.5
+
+
 def test_phy_docs_example_runs_verbatim():
     blocks = python_blocks(REPO / "docs" / "phy.md")
     assert len(blocks) == 1

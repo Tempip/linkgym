@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (EESM), `transmit(sinr_eff, mcs, u, *, num_allocated_re)` returning ACK, delivered bits
   and TBLER from uniforms the caller provides, and `MIN_MCS`/`MAX_MCS`. The simulator now
   uses these functions; its outputs are unchanged (golden tests). `docs/phy.md`.
+- `linkgym.beams` (experimental): `dft_codebook` for ULA and UPA arrays with oversampling
+  (Sionna PHY's grids of beams, with the direction of each beam), `steering_vector`,
+  `beam_gain` (|w^H h|^2), `rsrp_dbm` and `best_beam`, with the element order and phase
+  convention of Sionna RT's `PlanarArray` and synthetic arrays. `docs/beams.md`.
 
 ## [0.2.0] - 2026-10-03
 
