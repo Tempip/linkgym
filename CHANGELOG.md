@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-slot wideband SNR of a trace's splits at a target, for `snr_mode="link_budget"`
   inside the range of the BLER tables while keeping the power differences between
   trajectories; to be computed on the train split only.
+- `docs/api_stability.md`: which parts of linkgym are stable, experimental or internal, and
+  what patch and minor releases may change; each module's docstring states its status,
+  and `tests/test_public_api.py` snapshots the public names (`__all__`) of `linkgym`,
+  `linkgym.phy`, `linkgym.beams`, `linkgym.channels`, `linkgym.evaluation` and
+  `linkgym.datasets`.
 
 ## [0.2.0] - 2026-10-03
 

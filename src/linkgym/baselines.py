@@ -5,6 +5,8 @@ observation and info returned by the previous ``step`` (or by ``reset``), i.e. e
 what an agent sees before choosing the MCS of slot t. ILLA and OLLA read only
 ``info["report"]`` and the constant ``info["num_allocated_re"]``; the oracle reads
 ``info["privileged"]``, the SINR of slot t itself.
+
+Stability: stable (docs/api_stability.md).
 """
 
 from __future__ import annotations

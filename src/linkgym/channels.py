@@ -4,6 +4,8 @@
 sources: :class:`linkgym.sim.TDLChannelGain` (3GPP TDL fading, the default) and
 :class:`TraceChannelSource` (gains read from a trace file, see :func:`write_trace` and
 docs/channels.md).
+
+Stability: stable (docs/api_stability.md).
 """
 
 from __future__ import annotations
@@ -18,6 +20,25 @@ import numpy as np
 import torch
 
 from linkgym.config import SNR_MODES
+
+__all__ = [
+    "CATEGORIES",
+    "GAIN_UNIT",
+    "PRB_SAMPLINGS",
+    "TRACE_FORMAT",
+    "TRACE_FORMAT_VERSION",
+    "ChannelEpisode",
+    "ChannelSource",
+    "TraceChannelSource",
+    "TraceData",
+    "TraceFormatError",
+    "TraceInfo",
+    "inspect_trace",
+    "link_budget_snr_db",
+    "read_trace",
+    "tx_power_for_median_snr",
+    "write_trace",
+]
 
 TRACE_FORMAT = "linkgym-trace"
 TRACE_FORMAT_VERSION = 1

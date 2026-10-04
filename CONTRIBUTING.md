@@ -45,7 +45,9 @@ changes to `CHANGELOG.md` under `[Unreleased]`.
 Results in `docs/results/` are produced by the scripts in `examples/`; if a change affects
 them, regenerate them with those scripts rather than editing the files by hand.
 
-Releases follow [RELEASING.md](RELEASING.md).
+Releases follow [RELEASING.md](RELEASING.md). What a release may change in the public
+API is set out in [docs/api_stability.md](docs/api_stability.md): a change to the public
+names of a module also updates `tests/test_public_api.py`.
 
 ## Issues
 

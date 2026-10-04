@@ -11,6 +11,8 @@ in ``$LINKGYM_DATA_DIR`` if set, else in ``$XDG_CACHE_HOME/linkgym`` or ``~/.cac
 
 Also a command: ``python -m linkgym.datasets [NAME ...]`` lists the datasets, or fetches
 the named ones and prints their paths. Standard library only.
+
+Stability: stable (docs/api_stability.md).
 """
 
 from __future__ import annotations
@@ -22,6 +24,15 @@ import sys
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
+
+__all__ = [
+    "DATASETS",
+    "Dataset",
+    "DatasetError",
+    "ZENODO_RECORD",
+    "default_cache_dir",
+    "fetch",
+]
 
 # The Zenodo version record holding both Munich v1 files (DOI 10.5281/zenodo.23135098)
 ZENODO_RECORD: str | None = "23135098"

@@ -1,4 +1,7 @@
-"""A Gymnasium environment for 5G NR link adaptation built on NVIDIA Sionna SYS."""
+"""A Gymnasium environment for 5G NR link adaptation built on NVIDIA Sionna SYS.
+
+Stability: the names in ``__all__`` are stable (docs/api_stability.md).
+"""
 
 from importlib.metadata import version
 

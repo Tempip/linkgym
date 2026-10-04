@@ -1,4 +1,7 @@
-"""Evaluation of link adaptation policies on ``LinkAdaptation-v0``."""
+"""Evaluation of link adaptation policies on ``LinkAdaptation-v0``.
+
+Stability: stable (docs/api_stability.md).
+"""
 
 from __future__ import annotations
 
@@ -11,6 +14,15 @@ import gymnasium
 import numpy as np
 
 from linkgym.config import ENV_ID
+
+__all__ = [
+    "METRICS",
+    "cluster_bootstrap",
+    "evaluate",
+    "evaluate_episodes",
+    "paired_bootstrap",
+    "trace_episodes",
+]
 
 METRICS = ("goodput_mbps", "observed_tbler", "mean_mcs")
 

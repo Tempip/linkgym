@@ -1,4 +1,8 @@
-"""Gymnasium environment ``linkgym/LinkAdaptation-v0``: MCS selection on one 5G NR link."""
+"""Gymnasium environment ``linkgym/LinkAdaptation-v0``: MCS selection on one 5G NR link.
+
+Stability: internal; use the environment through ``gymnasium.make(linkgym.ENV_ID)``, whose
+behaviour is stable (docs/api_stability.md).
+"""
 
 from __future__ import annotations
 

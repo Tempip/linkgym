@@ -7,6 +7,9 @@ runs a link adaptation policy (oracle, ILLA, OLLA or fixed MCS) on top of it.
 
 Fixed setup: PDSCH (MCS category 1), MCS table 1, SISO, perfect CSI, no interference,
 no HARQ retransmissions. All computation runs on the CPU in float32.
+
+Stability: internal; the link-level functions are public in :mod:`linkgym.phy`
+(docs/api_stability.md).
 """
 
 from __future__ import annotations

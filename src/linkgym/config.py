@@ -1,4 +1,8 @@
-"""Scenario configuration of the linkgym environments."""
+"""Scenario configuration of the linkgym environments.
+
+Stability: ``ScenarioConfig`` is stable as ``linkgym.ScenarioConfig``; the rest of this
+module is internal (docs/api_stability.md).
+"""
 
 from __future__ import annotations
 
