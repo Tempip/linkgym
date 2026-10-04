@@ -17,8 +17,13 @@ keywords = [
     "link adaptation",
     "MCS selection",
     "reinforcement learning",
+    "reinforcement learning environment",
     "gymnasium",
     "sionna",
+    "Sionna RT",
+    "ray tracing",
+    "digital twin",
+    "AI-RAN",
     "wireless communications",
 ]
 classifiers = [

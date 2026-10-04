@@ -3,12 +3,13 @@
 [![CI](https://github.com/Tempip/linkgym/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Tempip/linkgym/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Tempip/linkgym/blob/main/LICENSE)
 [![Python 3.11 | 3.12](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://github.com/Tempip/linkgym/blob/main/pyproject.toml)
-[![PyPI](https://img.shields.io/pypi/v/linkgym.svg)](https://pypi.org/project/linkgym/)
+[![PyPI](https://img.shields.io/pypi/v/linkgym?cacheSeconds=3600)](https://pypi.org/project/linkgym/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23135621.svg)](https://doi.org/10.5281/zenodo.23135621)
 
-linkgym is a Gymnasium environment for 5G NR link adaptation (MCS selection) built on NVIDIA
-Sionna SYS, with TDL and ray-traced channels, classical baselines and a fixed evaluation
-protocol.
+linkgym is a reinforcement-learning environment (Gymnasium API) for 5G NR link adaptation
+(MCS selection) built on NVIDIA Sionna: Sionna SYS models the link, and the channel is 3GPP
+TDL fading or ray-traced with Sionna RT. It comes with classical baselines and a fixed
+evaluation protocol.
 
 ![Paired goodput difference against tuned OLLA on the TDL channel and on ray-traced Munich streets](https://raw.githubusercontent.com/Tempip/linkgym/main/docs/assets/header.png)
 
@@ -389,6 +390,8 @@ Setup, checks and commit conventions are in
 
 ## Related work
 
+Link adaptation with RL on Sionna:
+
 - [sionna-rl](https://github.com/tobiassugandi/sionna-rl): a reproducible study comparing PPO
   against Sionna's OLLA for single-link MCS selection.
 - M. Tsampazi, N. N. Santhi, N. Perrotta, F. Dressler, T. Melodia, "ARIADNE: AI-RAN Informed
@@ -396,8 +399,29 @@ Setup, checks and commit conventions are in
   [arXiv:2605.29772](https://arxiv.org/abs/2605.29772). RL (PPO) link adaptation integrated
   with Sionna SYS over ray-traced channels, compared against OLLA and SALAD.
 
-linkgym differs from these in that it is a reusable, pip-installable, registered Gymnasium
-environment rather than a single study.
+Other RL environments for wireless networks:
+
+- [mobile-env](https://github.com/stefanbschneider/mobile-env): a Gymnasium environment for
+  coordination in wireless mobile networks, such as multi-cell selection, with single- and
+  multi-agent RL.
+- [ns-O-RAN Gym](https://github.com/wineslab/ns-o-ran-gym): a Gymnasium environment for online
+  RL in 5G Open RAN on the ns-3-based ns-O-RAN simulator, with traffic-steering and
+  energy-saving use cases.
+- [RFRL Gym](https://github.com/vtnsi/rfrl-gym): a reinforcement-learning training
+  environment for cognitive radio applications in the RF spectrum, such as jamming, with
+  multi-agent support.
+
+Ray-traced channels with Sionna RT:
+
+- [ns3sionna](https://github.com/tkn-tub/ns3sionna): an ns-3 module that computes realistic
+  channels by ray tracing with Sionna RT for network simulation.
+- [RL-AERPAW-DT](https://github.com/EverettTucker471/RL-AERPAW-DT): a Sionna RT digital twin of
+  UAV-assisted communication in downtown Raleigh, compared with the AERPAW path-loss model,
+  with a reinforcement-learning pipeline for UAV control in progress.
+
+linkgym differs from the first group in being a reusable, registered Gymnasium environment
+rather than a single study, and from the second in modelling the link level (MCS selection
+on Sionna SYS) rather than network-level coordination.
 
 ## Citation
 
