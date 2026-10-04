@@ -30,6 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `linkgym.phy`, `linkgym.beams`, `linkgym.channels`, `linkgym.evaluation` and
   `linkgym.datasets`.
 
+### Changed
+
+- README roadmap: 0.4 trace format 2 with ray-traced paths, the reconstruction and a Munich
+  paths dataset; 0.5 beam-gain cache and multi-user sampling; 0.6 (optional) FR2 dataset
+  and/or a CDL-based multi-antenna source.
+- `linkgym.channels`, `linkgym.evaluation` and `linkgym.datasets` define `__all__`, so
+  `from ... import *` now imports only their public names.
+
 ## [0.2.0] - 2026-10-03
 
 ### Added

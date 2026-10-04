@@ -336,6 +336,24 @@ Full lists:
 
 ## Roadmap
 
+Multi-antenna channels and beam management, one small release at a time; the published
+results stay unchanged.
+
+- **0.3** (in progress on main): a stable public link-level API (`linkgym.phy`), DFT
+  codebooks, beam gain and RSRP utilities (`linkgym.beams`), a helper to choose the
+  transmit power of link-budget traces, and a written API stability policy.
+- **0.4**: trace format 2, which stores the ray-traced paths at the anchors, so that the
+  per-antenna channel can be rebuilt for any array and codebook. It comes with the
+  generator option to write it, the reconstruction, an `ArrayChannelSource` interface, and
+  a Munich 3.5 GHz paths dataset on Zenodo. The element pattern and polarization are fixed
+  at generation and recorded in the attributes.
+- **0.5**: a cache of beam gains for a chosen array and codebook, and sampling and
+  evaluation of several simultaneous users from a trace.
+- **0.6** (optional): an FR2 (28 GHz) dataset and/or a statistical multi-antenna channel
+  source based on 3GPP CDL.
+
+Other planned work:
+
 - A median-based normalization option for trace channels: the mean linear gain used now
   lets a short strong stretch push the rest of a trajectory into outage
   ([channels](https://github.com/Tempip/linkgym/blob/main/docs/channels.md#snr-modes)).
