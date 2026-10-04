@@ -206,7 +206,7 @@ whole a **concept DOI** that always resolves to the latest version.
 
 ```bibtex
 @dataset{rodrigues2026munich,
-  author    = {Rodrigues, Pedro},
+  author    = {Rodrigues Souza, Pedro José},
   title     = {linkgym Munich ray-traced channel traces, v1},
   year      = {2026},
   version   = {v1},

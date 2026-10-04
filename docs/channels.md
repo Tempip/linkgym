@@ -398,9 +398,9 @@ Open Database License (ODbL). The attribution is stored in every trace file.
 (`max_num_paths_per_src`); `seed` 42, deterministic. Trajectories whose mean gain is below
 -150 dB (`min_mean_gain_db`) are dropped.
 
-**Downloading it.** Both files are published on Zenodo under the ODbL (DOI: to be added
-when the record is published). `linkgym.datasets.fetch` downloads a file once, checks its
-SHA-256 and returns its path:
+**Downloading it.** Both files are published on Zenodo under the ODbL, DOI
+[10.5281/zenodo.23135098](https://doi.org/10.5281/zenodo.23135098).
+`linkgym.datasets.fetch` downloads a file once, checks its SHA-256 and returns its path:
 
 ```
 import gymnasium as gym
@@ -413,8 +413,8 @@ env = gym.make("linkgym/LinkAdaptation-v0", channel="trace", trace_path=str(path
 Files are cached in `$LINKGYM_DATA_DIR`, or by default in `~/.cache/linkgym`
 (`$XDG_CACHE_HOME/linkgym` if that is set), and checked against their SHA-256 on every
 call; `python -m linkgym.datasets` lists the datasets. Each name points to the files of one
-Zenodo version record, so its content never changes. Until the record is published,
-`fetch` raises `DatasetError`; generate the dataset as below.
+Zenodo version record, so its content never changes. To regenerate the dataset instead,
+see below.
 
 **Generating it.** Generate it in an environment with the `rt` extra (an RTX 3060 took
 74 min, 101-119 ms per path solve; 67 MB for 76 trajectories):

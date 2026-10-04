@@ -170,7 +170,7 @@ Ray-traced channel traces of 15 streets around one rooftop base station in Sionn
 `munich` scene: 76 trajectories of 4000 slots (2 s at 15 m/s), 52 PRBs at 3.5 GHz, split
 by street into train, val and test, plus a second ray-tracing realization of the test
 streets. Published on Zenodo, DOI
-[10.5281/zenodo.XXXXXXX](https://doi.org/10.5281/zenodo.XXXXXXX), under the Open Database
+[10.5281/zenodo.23135098](https://doi.org/10.5281/zenodo.23135098), under the Open Database
 License (ODbL) 1.0; the scene derives from OpenStreetMap data, (c) OpenStreetMap
 contributors.
 
@@ -371,7 +371,7 @@ If you use linkgym, please cite it:
 
 ```bibtex
 @software{rodrigues2026linkgym,
-  author  = {Rodrigues, Pedro},
+  author  = {Rodrigues Souza, Pedro José},
   title   = {linkgym: A Gymnasium environment for 5G NR link adaptation},
   year    = {2026},
   version = {0.2.0},
@@ -383,12 +383,12 @@ and, if you use the Munich traces, the dataset version you used:
 
 ```bibtex
 @dataset{rodrigues2026munich,
-  author    = {Rodrigues, Pedro},
+  author    = {Rodrigues Souza, Pedro José},
   title     = {linkgym Munich ray-traced channel traces, v1},
   year      = {2026},
   version   = {v1},
   publisher = {Zenodo},
-  doi       = {10.5281/zenodo.XXXXXXX}
+  doi       = {10.5281/zenodo.23135098}
 }
 ```
 

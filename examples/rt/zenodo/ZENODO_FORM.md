@@ -11,10 +11,10 @@ Values for the zenodo.org upload form ("New upload"). Steps: [RELEASING.md](../.
 | Resource type | Dataset |
 | Title | linkgym Munich ray-traced channel traces, v1 (Sionna RT, 3.5 GHz, 52 PRBs) |
 | Publication date | the day you publish (YYYY-MM-DD) |
-| Creators | Rodrigues, Pedro (type: Personal; role: none needed; add ORCID and affiliation if you have them) |
+| Creators | Rodrigues Souza, Pedro José (family name: Rodrigues Souza, given names: Pedro José; type: Personal; role: none needed; add ORCID and affiliation if you have them) |
 | Description | the text below |
 | Licenses | Open Data Commons Open Database License v1.0 (search "Open Database License"; SPDX `ODbL-1.0`) |
-| Copyright | Map data (c) OpenStreetMap contributors; traces (c) 2026 Pedro Rodrigues |
+| Copyright | Map data (c) OpenStreetMap contributors; traces (c) 2026 Pedro José Rodrigues Souza |
 
 Description:
 

@@ -23,8 +23,8 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-# The Zenodo version record holding both Munich v1 files; None until it is published
-ZENODO_RECORD: str | None = None
+# The Zenodo version record holding both Munich v1 files (DOI 10.5281/zenodo.23135098)
+ZENODO_RECORD: str | None = "23135098"
 URL = "https://zenodo.org/records/{record}/files/{filename}?download=1"
 TIMEOUT = 60  # seconds without data before a download fails
 CHUNK = 1 << 20

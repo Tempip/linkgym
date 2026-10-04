@@ -8,8 +8,8 @@ abstract: >-
   dataset of Munich streets.
 type: software
 authors:
-  - family-names: Rodrigues
-    given-names: Pedro
+  - family-names: Rodrigues Souza
+    given-names: Pedro José
 version: 0.2.0
 date-released: 2026-10-03
 repository-code: "https://github.com/Tempip/linkgym"
@@ -23,3 +23,16 @@ keywords:
   - Gymnasium
   - Sionna
   - ray tracing
+references:
+  - type: dataset
+    title: "linkgym Munich ray-traced channel traces, v1"
+    authors:
+      - family-names: Rodrigues Souza
+        given-names: Pedro José
+    version: v1
+    year: 2026
+    doi: 10.5281/zenodo.23135098
+    url: "https://doi.org/10.5281/zenodo.23135098"
+    publisher:
+      name: Zenodo
+    license: ODbL-1.0
