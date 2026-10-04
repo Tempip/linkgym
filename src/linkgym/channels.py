@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -137,6 +138,50 @@ def link_budget_snr_db(
     """
     noise_dbm = 10.0 * math.log10(BOLTZMANN * temperature_k * bandwidth_hz) + 30.0
     return tx_power_dbm - noise_dbm - noise_figure_db
+
+
+def tx_power_for_median_snr(
+    trace: str | os.PathLike,
+    splits: Sequence[str],
+    target_snr_db: float,
+    noise_figure_db: float = 7.0,
+) -> float:
+    """Transmit power [dBm] that puts the median per-slot wideband SNR at ``target_snr_db``.
+
+    For ``snr_mode="link_budget"``: one transmit power for all trajectories places the
+    typical SNR inside the range of the BLER tables (-5 to 20 dB for PDSCH table 1) while
+    keeping the real power differences between and along trajectories, unlike
+    ``"normalized"``, which scales each trajectory separately.
+
+    The median is taken over every slot of every trajectory whose split is in ``splits``,
+    of the slot's wideband SNR: the reference SNR of :func:`link_budget_snr_db` over the
+    trace's bandwidth (``num_prb`` x 12 x subcarrier spacing, as in
+    :class:`TraceChannelSource`) plus 10 log10 of the slot's gain averaged over its PRBs.
+    Compute it on the train split only, so that val and test data never influence the
+    scenario definition.
+
+    :param trace: Trace file (format version 1)
+    :param splits: Split labels whose trajectories set the median, e.g. ``["train"]``
+    :param target_snr_db: Median per-slot wideband SNR to reach [dB]
+    :param noise_figure_db: Receiver noise figure [dB], as given to the scenario
+    """
+    info = inspect_trace(trace)
+    if not splits:
+        raise ValueError("splits must not be empty")
+    available = sorted(set(info.split))
+    unknown = [s for s in splits if s not in available]
+    if unknown:
+        raise ValueError(f"split(s) {unknown} not in {info.path}; available: {available}")
+    eligible = np.flatnonzero(np.isin(info.split, list(splits)))
+    with _open_trace(info.path) as f:
+        dataset = f["gain"]
+        wideband = np.concatenate([dataset[t].mean(axis=1, dtype=np.float64) for t in eligible])
+    with np.errstate(divide="ignore"):
+        median_gain_db = float(np.median(10.0 * np.log10(wideband)))
+    if not math.isfinite(median_gain_db):
+        raise ValueError(f"more than half of the slots of splits {list(splits)} have zero gain")
+    bandwidth = info.num_prbs * 12 * info.attrs["subcarrier_spacing_hz"]
+    return target_snr_db - median_gain_db - link_budget_snr_db(0.0, noise_figure_db, bandwidth)
 
 
 def write_trace(

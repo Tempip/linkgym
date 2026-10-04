@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Sionna PHY's grids of beams, with the direction of each beam), `steering_vector`,
   `beam_gain` (|w^H h|^2), `rsrp_dbm` and `best_beam`, with the element order and phase
   convention of Sionna RT's `PlanarArray` and synthetic arrays. `docs/beams.md`.
+- `linkgym.channels.tx_power_for_median_snr`: the transmit power that puts the median
+  per-slot wideband SNR of a trace's splits at a target, for `snr_mode="link_budget"`
+  inside the range of the BLER tables while keeping the power differences between
+  trajectories; to be computed on the train split only.
 
 ## [0.2.0] - 2026-10-03
 

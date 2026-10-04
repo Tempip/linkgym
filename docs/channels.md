@@ -192,6 +192,29 @@ used. `info["snr_db"]` is the realized mean SNR of the episode.
 For example, 30 dBm over 52 PRBs at 30 kHz (18.72 MHz) with a 7 dB noise figure gives a
 reference SNR of 124.25 dB; a gain of -110 dB then means an SNR of 14.25 dB.
 
+**Choosing the transmit power.** *Unreleased: available on main, will ship in v0.3.0.*
+
+`linkgym.channels.tx_power_for_median_snr(trace, splits, target_snr_db, noise_figure_db)`
+returns the transmit power that puts the median per-slot wideband SNR at
+`target_snr_db`.
+
+- **The median.** It is taken over every slot of every trajectory of `splits`, of the
+  link-budget reference SNR plus 10 log10 of the slot's gain averaged over its PRBs.
+- **Why use it.** It places the typical SNR inside the range of the BLER tables (-5 to
+  20 dB for PDSCH table 1) while keeping the real power differences between and along
+  trajectories, which `normalized` removes.
+- **Compute it on the train split only**, so that val and test data never influence the
+  scenario definition:
+
+```
+tx_power_dbm = tx_power_for_median_snr("munich-v1.h5", ["train"], 10.0, 7.0)
+gym.make("linkgym/LinkAdaptation-v0", channel="trace", trace_path="munich-v1.h5",
+         snr_mode="link_budget", tx_power_dbm=tx_power_dbm, noise_figure_db=7.0)
+```
+
+With one power for all trajectories, the SNR still spans the trace's dynamic range: far
+or shadowed stretches stay below the tables and close ones above them.
+
 ## Limitations
 
 - **SINR outside the BLER data.** With `link_budget`, a UE close to the transmitter can
