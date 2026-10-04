@@ -377,6 +377,7 @@ If you use linkgym, please cite it:
   title   = {linkgym: A Gymnasium environment for 5G NR link adaptation},
   year    = {2026},
   version = {0.2.0},
+  doi     = {10.5281/zenodo.23135622},
   url     = {https://github.com/Tempip/linkgym}
 }
 ```
