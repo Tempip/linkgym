@@ -19,6 +19,8 @@ of linkgym are stable, which are experimental, and what each kind of release may
 | The `linkgym-traces` command | stable | subcommands and options |
 | Trace format version 1 | stable | readable by every future linkgym version |
 | `linkgym.beams` | experimental | [beams.md](beams.md) |
+| `linkgym.paths` | experimental | unreleased, for 0.4.0: trace format 2 (paths), reconstruction, `PathTraceSource` ([paths.md](paths.md)) |
+| Trace format version 2 | experimental | unreleased, for 0.4.0 ([paths.md](paths.md)) |
 | The Python API of `linkgym.rt` | experimental | use the `linkgym-traces` command |
 | `linkgym.sim`, `linkgym.env`, `linkgym.config` | internal | use `linkgym.phy`, `gymnasium.make` and `linkgym.ScenarioConfig` |
 
@@ -42,9 +44,9 @@ module's docstring states its status.
    Pinned dependencies, such as Sionna, change only in minor releases, and only after the
    golden tests pass with the new version.
 6. **Public names are snapshotted.** `tests/test_public_api.py` records the public names
-   of `linkgym`, `linkgym.phy`, `linkgym.beams`, `linkgym.channels`, `linkgym.evaluation`
-   and `linkgym.datasets`. Changing them means updating that test, this page and the
-   CHANGELOG.
+   of `linkgym`, `linkgym.phy`, `linkgym.beams`, `linkgym.paths`, `linkgym.channels`,
+   `linkgym.evaluation` and `linkgym.datasets`. Changing them means updating that test,
+   this page and the CHANGELOG.
 
 ## Pinning linkgym in your project
 

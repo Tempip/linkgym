@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TraceChannelSource`, and the gain of every beam of an optional codebook. In
   `normalized` mode a single antenna has unit mean power, as in format 1.
 - `linkgym.evaluation.trace_episodes` also lists the episodes of a path trace.
+- `docs/paths.md`: trace format 2, how the channel of an array is rebuilt, what can and
+  cannot change at load time, the dependency on Sionna RT 2.1.0's direction vectors, and
+  `PathTraceSource`; pointers from `docs/channels.md`, and `linkgym.paths` in the API
+  stability policy (experimental).
 - `tests/data/munich_paths_sample.h5` (0.7 MB, ODbL): the paths of the first 100 slots of
   the four trajectories of the format-1 sample, made with
   `examples/rt/make_paths_sample.py`.

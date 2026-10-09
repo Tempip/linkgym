@@ -86,6 +86,17 @@ def test_beams_docs_example_runs_verbatim():
     assert (round(float(namespace["codebook"].v[namespace["best"]]), 6)) == 0.5
 
 
+def test_paths_docs_example_runs_verbatim(monkeypatch):
+    blocks = python_blocks(REPO / "docs" / "paths.md")
+    assert len(blocks) == 1
+    monkeypatch.chdir(REPO)  # the example reads the committed sample
+    namespace = {"__name__": "__docs__"}
+    exec(compile(blocks[0], "docs/paths.md python block", "exec"), namespace)
+    assert tuple(namespace["episode"].channel.shape) == (2, 50, 52, 32)
+    assert tuple(namespace["gain"].shape) == (2, 32)
+    namespace["source"].close()
+
+
 def test_phy_docs_example_runs_verbatim():
     blocks = python_blocks(REPO / "docs" / "phy.md")
     assert len(blocks) == 1

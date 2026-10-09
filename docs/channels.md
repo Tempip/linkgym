@@ -81,6 +81,10 @@ The environment reads `gain`, `split`, `group` and `category`; the other optiona
 datasets are for analysis. `gain` is stored contiguous and uncompressed (as
 `write_trace` does), so that the window of an episode is one contiguous read.
 
+Trace format version 2 (unreleased, for v0.4.0) stores the ray-traced paths instead of
+gains, so that the channel of any transmit array can be rebuilt at load time; it has its
+own reader, `linkgym.paths`, described in [paths.md](paths.md).
+
 ### Validation
 
 A file is rejected with `TraceFormatError` (a `ValueError`, its message starts with the
@@ -316,7 +320,8 @@ linkgym-traces accuracy config.json --route NAME --start-m 0 --num-slots 1000
 - `generate` writes the trace. `--routes`, `--splits` and `--max-trajectories` restrict
   it, e.g. for a quick test, and `--solver KEY=VALUE ...` overrides solver settings (the
   values used are recorded in the file); an existing file is only replaced with
-  `--overwrite`.
+  `--overwrite`. With `--store-paths` (unreleased, for v0.4.0) it writes the paths of every
+  anchor instead of the gains, in trace format 2 ([paths.md](paths.md)).
 - `accuracy` compares, on one stretch of a route, a path solve at every slot with the
   anchored channel for several anchor spacings (NMSE, per-PRB and wideband gain error).
 
