@@ -4,6 +4,10 @@
 
     path = fetch("munich-v1")  # downloaded on first use, then read from the cache
 
+The gain traces are ``munich-v1`` and ``munich-v1-test-alt`` (trace format 1, for
+``channel="trace"``); ``munich-v2`` and ``munich-v2-test-alt`` hold the ray-traced paths of
+the same trajectories (trace format 2, read with :mod:`linkgym.paths`).
+
 Every name refers to one file of one Zenodo *version* record, never to the concept record
 (which resolves to the latest version), so the file behind a name never changes; its SHA-256
 and size are fixed here and checked on download and on every later call. Files are cached
@@ -36,6 +40,9 @@ __all__ = [
 
 # The Zenodo version record holding both Munich v1 files (DOI 10.5281/zenodo.23135098)
 ZENODO_RECORD: str | None = "23135098"
+# The Zenodo version record holding both Munich v2 files (DOI 10.5281/zenodo.23267742); it
+# also carries the v1 files, but the v1 names keep pointing to their own record
+_MUNICH_V2_RECORD = "23267742"
 URL = "https://zenodo.org/records/{record}/files/{filename}?download=1"
 TIMEOUT = 60  # seconds without data before a download fails
 CHUNK = 1 << 20
@@ -79,6 +86,22 @@ DATASETS: dict[str, Dataset] = {
         record=ZENODO_RECORD,
         description="the 23 test trajectories of munich-v1 traced again with 8 million rays "
         "(alternative realization)",
+    ),
+    "munich-v2": Dataset(
+        filename="munich-v2.h5",
+        sha256="dbbc924813d79f15c69235dfee019669616988ec3033d6458a89e47ca556961c",
+        size=317_527_408,
+        record=_MUNICH_V2_RECORD,
+        description="the ray-traced paths of the 76 trajectories of munich-v1 (trace format 2, "
+        "for antenna arrays; linkgym.paths)",
+    ),
+    "munich-v2-test-alt": Dataset(
+        filename="munich-v2-test-alt.h5",
+        sha256="0e0f0959b169c2c4dd71b0436e7e7784cadc101dfd9c64ecc1033e43703fb584",
+        size=73_536_940,
+        record=_MUNICH_V2_RECORD,
+        description="the ray-traced paths of the 23 trajectories of munich-v1-test-alt (trace "
+        "format 2)",
     ),
 }
 

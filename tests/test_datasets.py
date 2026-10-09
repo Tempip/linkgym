@@ -135,8 +135,10 @@ def test_corrupt_cache_raises_and_force_downloads_again(monkeypatch, cache):
 
 
 def test_unknown_name_lists_the_datasets():
-    with pytest.raises(DatasetError, match="munich-v1, munich-v1-test-alt"):
-        fetch("munich-v2")
+    with pytest.raises(
+        DatasetError, match="munich-v1, munich-v1-test-alt, munich-v2, munich-v2-test-alt"
+    ):
+        fetch("munich-v3")
 
 
 def test_unpublished_record(monkeypatch, cache):
@@ -150,19 +152,47 @@ def test_unpublished_record(monkeypatch, cache):
 def test_command_lists_and_fetches(monkeypatch, cache, capsys):
     serve(monkeypatch)
     assert datasets.main([]) == 0
-    assert "munich-v1:" in capsys.readouterr().out
+    listing = capsys.readouterr().out
+    assert "munich-v1:" in listing and "munich-v2:" in listing
     assert datasets.main(["fake"]) == 0
     assert capsys.readouterr().out.strip() == str(cache / "fake.h5")
-    assert datasets.main(["munich-v2"]) == 1
+    assert datasets.main(["munich-v3"]) == 1
     assert "unknown dataset" in capsys.readouterr().err
 
 
 def test_registry_matches_the_protocol_hashes():
     # The v0.2 experiment checked these files by hash; the published ones must be the same
     protocol = (REPO / "examples" / "evaluate_v02.py").read_text(encoding="utf-8")
-    for name, dataset in datasets.DATASETS.items():
-        assert re.fullmatch(r"[0-9a-f]{64}", dataset.sha256)
+    for name in ("munich-v1", "munich-v1-test-alt"):
+        dataset = datasets.DATASETS[name]
         assert f'"data/{dataset.filename}",\n        "{dataset.sha256}"' in protocol, name
+
+
+# Each name is pinned to the Zenodo version record that published its file
+RECORDS = {
+    "munich-v1": "23135098",
+    "munich-v1-test-alt": "23135098",
+    "munich-v2": "23267742",
+    "munich-v2-test-alt": "23267742",
+}
+
+
+def test_registry_names_and_records():
+    assert sorted(datasets.DATASETS) == sorted(RECORDS)
+    assert datasets.ZENODO_RECORD == "23135098"
+    for name, dataset in datasets.DATASETS.items():
+        assert dataset.record == RECORDS[name], name
+        assert dataset.filename == f"{name}.h5"
+        assert re.fullmatch(r"[0-9a-f]{64}", dataset.sha256), name
+        assert dataset.size > 0
+
+
+@pytest.mark.parametrize("name", sorted(RECORDS))
+def test_each_name_downloads_from_its_version_record(monkeypatch, tmp_path, name):
+    calls = serve(monkeypatch, error=urllib.error.URLError("offline"))
+    with pytest.raises(DatasetError, match="could not download"):
+        fetch(name, cache_dir=tmp_path, progress=False)
+    assert calls == [f"https://zenodo.org/records/{RECORDS[name]}/files/{name}.h5?download=1"]
 
 
 @pytest.mark.parametrize("name", sorted(datasets.DATASETS))
