@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "linkgym"
-version = "0.3.0"
+version = "0.4.0"
 description = "A Gymnasium environment for 5G NR link adaptation (MCS selection) built on NVIDIA Sionna SYS, with classical baselines and a fixed evaluation protocol."
 readme = "README.md"
 license = "MIT"
