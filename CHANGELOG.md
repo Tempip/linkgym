@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Trace format 2 (`channel_kind = "paths"`), in the new experimental module
+  `linkgym.paths`: the ray-traced paths of every anchor (complex coefficient, delay,
+  Doppler shift, unit directions of departure and arrival) in a compressed-row layout,
+  with the per-trajectory data of format 1 and each trajectory's mean single-antenna gain.
+  `write_path_trace`, `inspect_path_trace` (strict validation, optionally recomputing the
+  mean gains), `read_path_window`, and `reconstruct_cfr`, which rebuilds the channel of
+  every antenna of any transmit array (geometry, spacing, orientation) as Sionna RT's
+  synthetic arrays do. Format 1 and its API are unchanged.
+
 ## [0.3.0] - 2026-10-04
 
 ### Added
