@@ -195,6 +195,15 @@ def test_cli_solver_override_parsing():
         _solver_overrides(["samples_per_src"])
 
 
+def test_store_paths_needs_prb_centres(tmp_path):
+    from linkgym.rt.generate import generate
+
+    config = parse_config(with_changes(["prb_sampling"], "mean12"))
+    with pytest.raises(ConfigError, match="prb_sampling 'center'"):
+        generate(config, tmp_path / "t.h5", store_paths=True)
+    assert not (tmp_path / "t.h5").exists()
+
+
 def test_split_overlap():
     data = copy.deepcopy(MINIMAL)
     data["routes"].append({"name": "c", "split": "val", "waypoints": [[5, 5], [25, 5]]})

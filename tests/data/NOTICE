@@ -1,7 +1,10 @@
 munich_sample.h5 is a subset of the linkgym Munich ray-traced channel traces v1 (the
 first 1000 slots of four trajectories), made with examples/rt/make_sample.py.
+munich_paths_sample.h5 holds the ray-traced paths of the first 100 slots of the same four
+trajectories (trace format 2), solved again with the same configuration and made with
+examples/rt/make_paths_sample.py.
 
-Unlike the code of this repository (MIT), it is made available under the Open Database
-License (ODbL) 1.0, https://opendatacommons.org/licenses/odbl/1-0/. It derives from the
+Unlike the code of this repository (MIT), they are made available under the Open Database
+License (ODbL) 1.0, https://opendatacommons.org/licenses/odbl/1-0/. They derive from the
 "munich" scene of Sionna RT, built from OpenStreetMap data, (c) OpenStreetMap
 contributors, available under the ODbL, https://www.openstreetmap.org/copyright

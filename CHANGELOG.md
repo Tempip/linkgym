@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mean gains), `read_path_window`, and `reconstruct_cfr`, which rebuilds the channel of
   every antenna of any transmit array (geometry, spacing, orientation) as Sionna RT's
   synthetic arrays do. Format 1 and its API are unchanged.
+- `linkgym-traces generate --store-paths` writes format 2: the same path solves, kept
+  trajectories and attributes as format 1, with the paths of every anchor in a fixed order,
+  so files stay byte-reproducible. It reads the direction vectors from Sionna RT 2.1.0's
+  private `Paths._k_tx` and `Paths._k_rx`, with a clear error if they are missing; a GPU
+  test checks the reconstruction of 4x8 and 1x32 arrays against Sionna RT's own synthetic
+  arrays.
+- `tests/data/munich_paths_sample.h5` (0.7 MB, ODbL): the paths of the first 100 slots of
+  the four trajectories of the format-1 sample, made with
+  `examples/rt/make_paths_sample.py`.
 
 ## [0.3.0] - 2026-10-04
 

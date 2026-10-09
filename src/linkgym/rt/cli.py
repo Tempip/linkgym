@@ -36,6 +36,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--max-trajectories", type=int, metavar="N", help="at most N trajectories per route"
     )
+    p.add_argument(
+        "--store-paths",
+        action="store_true",
+        help="write the paths of every anchor (trace format 2, for multi-antenna "
+        "reconstruction) instead of per-PRB gains",
+    )
     p.add_argument("--overwrite", action="store_true", help="replace an existing output file")
 
     p = commands.add_parser("check", help="check the routes against the scene, no path solves")
@@ -72,7 +78,13 @@ def main(argv: list[str] | None = None) -> int:
 
             config = config.select(args.routes).select_splits(args.splits)
             config = config.with_solver(_solver_overrides(args.solver))
-            generate(config, args.output, max_trajectories=args.max_trajectories, log=log)
+            generate(
+                config,
+                args.output,
+                max_trajectories=args.max_trajectories,
+                store_paths=args.store_paths,
+                log=log,
+            )
         elif args.command == "check":
             from linkgym.rt.generate import check
 

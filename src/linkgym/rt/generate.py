@@ -286,6 +286,12 @@ class Solver:
         self, position: np.ndarray, velocity: np.ndarray, num_time_steps: int
     ) -> tuple[np.ndarray, int, bool]:
         """Gain [num_time_steps, num_prb] from one anchor, number of paths, and LoS flag."""
+        gain, num_paths, los, _ = self._solve(position, velocity, num_time_steps, False)
+        return gain, num_paths, los
+
+    def _solve(
+        self, position: np.ndarray, velocity: np.ndarray, num_time_steps: int, keep_paths: bool
+    ) -> tuple[np.ndarray, int, bool, dict[str, np.ndarray] | None]:
         mi = self._mi
         self._rx.position = mi.Point3f(*(float(v) for v in position))
         self._rx.velocity = mi.Vector3f(*(float(v) for v in velocity))
@@ -300,7 +306,28 @@ class Solver:
             interactions = np.asarray(paths.interactions.numpy())
             interactions = interactions.reshape(interactions.shape[0], -1)
             los = bool(np.any(valid & np.all(interactions == self._none, axis=0)))
-        return gain, num_paths, los
+        return gain, num_paths, los, self.sorted_paths(paths) if keep_paths else None
+
+    def sorted_paths(self, paths) -> dict[str, np.ndarray]:
+        """The valid paths of a 1x1 synthetic-array solve, in the order of
+        :meth:`frequency_response`, at Sionna RT's float32 precision: ``a`` [P] complex64,
+        ``tau`` and ``doppler`` [P], ``k_tx`` and ``k_rx`` [P, 3] float32."""
+        valid = np.asarray(paths.valid.numpy()).reshape(-1).astype(bool)
+        a_re, a_im = (np.asarray(x.numpy(), dtype=np.float32).reshape(-1)[valid] for x in paths.a)
+        tau = np.asarray(paths.tau.numpy(), dtype=np.float32).reshape(-1)[valid]
+        doppler = np.asarray(paths.doppler.numpy(), dtype=np.float32).reshape(-1)[valid]
+        k_tx, k_rx = (k[valid] for k in _direction_vectors(paths, valid.size))
+        # The keys of frequency_response: float32 to float64 is exact, so the order is the same
+        order = np.lexsort((doppler, a_im, a_re, tau))
+        a = np.empty(len(order), dtype=np.complex64)
+        a.real, a.imag = a_re[order], a_im[order]
+        return {
+            "a": a,
+            "tau": tau[order],
+            "doppler": doppler[order],
+            "k_tx": k_tx[order],
+            "k_rx": k_rx[order],
+        }
 
     def frequency_response(self, paths, num_time_steps: int) -> np.ndarray:
         """Channel frequency response [num_time_steps, num_frequencies], complex128.
@@ -330,18 +357,61 @@ class Solver:
         self, positions: np.ndarray, directions: np.ndarray, spacing: int
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Gains [N, num_prb] for consecutive slots, solving every ``spacing`` slots."""
+        gain, num_paths, los, _ = self._solve_slots(positions, directions, spacing, False)
+        return gain, num_paths, los
+
+    def solve_slots_with_paths(
+        self, positions: np.ndarray, directions: np.ndarray, spacing: int
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[dict[str, np.ndarray]]]:
+        """As :meth:`solve_slots`, plus the paths of every anchor (:meth:`sorted_paths`)."""
+        return self._solve_slots(positions, directions, spacing, True)
+
+    def _solve_slots(
+        self, positions: np.ndarray, directions: np.ndarray, spacing: int, keep_paths: bool
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[dict[str, np.ndarray]] | None]:
         n = len(positions)
         gain = np.empty((n, self.config.num_prb))
         anchors = range(0, n, spacing)
         num_paths = np.empty(len(anchors), dtype=np.int64)
         los = np.empty(len(anchors), dtype=bool)
+        anchor_paths = [] if keep_paths else None
         for i, start in enumerate(anchors):
             steps = min(spacing, n - start)
             velocity = np.append(directions[start] * self.config.speed_mps, 0.0)
-            gain[start : start + steps], num_paths[i], los[i] = self.solve(
-                positions[start], velocity, steps
+            gain[start : start + steps], num_paths[i], los[i], kept = self._solve(
+                positions[start], velocity, steps, keep_paths
             )
-        return gain, num_paths, los
+            if keep_paths:
+                anchor_paths.append(kept)
+        return gain, num_paths, los, anchor_paths
+
+
+def _direction_vectors(paths, num_candidates: int) -> tuple[np.ndarray, np.ndarray]:
+    """Unit directions of departure and arrival [num_candidates, 3], float32, scene frame.
+
+    Sionna RT 2.1.0 keeps them only in the private ``Paths._k_tx`` and ``Paths._k_rx``
+    (paths.py:925-926), the vectors its synthetic arrays use (paths.py:958-975).
+    linkgym pins sionna-rt==2.1.0, and an ``rt`` test checks the reconstruction from them
+    against Sionna RT's own synthetic-array output.
+    """
+    vectors = []
+    for name in ("_k_tx", "_k_rx"):
+        k = getattr(paths, name, None)
+        if k is None:
+            raise RuntimeError(
+                f"Sionna RT's Paths has no {name}; storing paths needs the direction vectors "
+                f"of sionna-rt 2.1.0 (installed: {importlib.metadata.version('sionna-rt')})"
+            )
+        k = np.asarray(k.numpy(), dtype=np.float32)
+        if k.shape[-1] != 3 or k.size != 3 * num_candidates:
+            raise RuntimeError(
+                f"Sionna RT's Paths.{name} has shape {k.shape}; expected 3 components for each "
+                f"of the {num_candidates} path candidates of a 1x1 synthetic-array solve "
+                f"(installed sionna-rt: {importlib.metadata.version('sionna-rt')}, "
+                "linkgym needs 2.1.0)"
+            )
+        vectors.append(k.reshape(num_candidates, 3))
+    return vectors[0], vectors[1]
 
 
 # Commands
@@ -392,11 +462,21 @@ def generate(
     output: str | os.PathLike,
     *,
     max_trajectories: int | None = None,
+    store_paths: bool = False,
     log: Callable[[str], None] = print,
 ) -> dict[str, Any]:
-    """Generate the trace file ``output`` (format version 1) from ``config``."""
+    """Generate the trace file ``output`` from ``config``.
+
+    By default the file has trace format 1 (per-PRB gains). With ``store_paths`` it has
+    format 2 (``channel_kind = "paths"``, :mod:`linkgym.paths`): the paths of every anchor,
+    from which the channel of any transmit array can be rebuilt, with the same
+    per-trajectory data. The path solves, the dropped trajectories and the attributes are
+    the same in both cases.
+    """
     from linkgym.channels import write_trace
 
+    if store_paths and config.prb_sampling != "center":
+        raise ConfigError("storing paths needs prb_sampling 'center'")
     dr, mi, _ = import_rt()
     scene = load_scene(config)
     geometry = Geometry(scene)
@@ -405,7 +485,7 @@ def generate(
     k = config.anchor_spacing_slots
 
     gains, splits, groups, positions, num_paths, los, summary = [], [], [], [], [], [], []
-    categories = []
+    categories, trajectory_paths = [], []
     start_all = time.perf_counter()
     for layout in layouts:
         route = layout.route
@@ -417,7 +497,9 @@ def generate(
         dropped = []  # trajectory index along the route, reason, mean gain
         los_anchors = []
         for j in range(num_traj):
-            gain, paths, line = solver.solve_slots(layout.positions[j], layout.directions[j], k)
+            gain, paths, line, anchor_paths = solver._solve_slots(
+                layout.positions[j], layout.directions[j], k, store_paths
+            )
             mean_gain_db = 10 * np.log10(gain.mean()) if gain.mean() > 0 else -np.inf
             reason = None
             if np.any(gain.sum(axis=1) == 0):
@@ -436,6 +518,8 @@ def generate(
                 )
                 continue
             kept += 1
+            if store_paths:
+                trajectory_paths.append(anchor_paths)
             gains.append(gain.astype(np.float32))
             splits.append(route.split)
             groups.append(route.group)
@@ -505,6 +589,25 @@ def generate(
     }
     if config.attribution_text:
         attrs["attribution"] = config.attribution_text
+    if store_paths:
+        _write_paths(
+            output,
+            config,
+            attrs,
+            trajectory_paths,
+            gains,
+            splits,
+            groups,
+            positions,
+            los,
+            categories,
+        )
+        log(
+            f"wrote {output} (paths): {len(gains)} trajectories x {config.num_slots} slots, "
+            f"{sum(int(n.sum()) for n in num_paths)} paths, {num_dropped} dropped, "
+            f"{total_time:.0f} s"
+        )
+        return {"routes": summary, "num_dropped": num_dropped, "seconds": total_time}
     write_trace(
         output,
         np.stack(gains),
@@ -525,6 +628,45 @@ def generate(
         f"{num_dropped} dropped, {total_time:.0f} s"
     )
     return {"routes": summary, "num_dropped": num_dropped, "seconds": total_time}
+
+
+def _write_paths(
+    output, config, attrs, trajectory_paths, gains, splits, groups, positions, los, categories
+) -> None:
+    """Write the kept trajectories of :func:`generate` in trace format 2."""
+    from linkgym.paths import write_path_trace
+
+    counts = np.array([[len(p["tau"]) for p in anchors] for anchors in trajectory_paths])
+    offsets = np.zeros((counts.shape[0], counts.shape[1] + 1), dtype=np.int64)
+    offsets[:, 1:] = np.cumsum(counts.ravel()).reshape(counts.shape)
+    offsets[1:, 0] = offsets[:-1, -1]
+    columns = {
+        key: np.concatenate([p[key] for anchors in trajectory_paths for p in anchors])
+        for key in ("a", "tau", "doppler", "k_tx", "k_rx")
+    }
+    passed = {"tx_orientation", "tx_antenna", "rx_antenna", "anchor_spacing_slots"}
+    write_path_trace(
+        output,
+        split=splits,
+        path_offset=offsets,
+        **columns,
+        carrier_frequency_hz=config.carrier_frequency_hz,
+        subcarrier_spacing_hz=config.subcarrier_spacing_hz,
+        slot_duration_s=config.slot_duration_s,
+        num_prb=config.num_prb,
+        num_slots=config.num_slots,
+        anchor_spacing_slots=config.anchor_spacing_slots,
+        tx_antenna=asdict(config.tx_antenna),
+        rx_antenna=asdict(config.rx_antenna),
+        tx_orientation=attrs["tx_orientation"],
+        # The mean of the float32 gains, as format 1 normalizes them
+        mean_gain=np.array([g.mean(dtype=np.float64) for g in gains]),
+        group=np.asarray(groups),
+        category=categories,
+        rx_position=np.stack(positions),
+        los=np.stack(los),
+        attrs={key: value for key, value in attrs.items() if key not in passed},
+    )
 
 
 def accuracy(
