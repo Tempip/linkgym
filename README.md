@@ -9,7 +9,10 @@
 linkgym is a reinforcement-learning environment (Gymnasium API) for 5G NR link adaptation
 (MCS selection) built on NVIDIA Sionna: Sionna SYS models the link, and the channel is 3GPP
 TDL fading or ray-traced with Sionna RT. It comes with classical baselines and a fixed
-evaluation protocol.
+evaluation protocol. Its building blocks can also be used to build other environments, such
+as beam management: link-level functions (`linkgym.phy`), DFT beam codebooks
+(`linkgym.beams`) and per-antenna channels rebuilt from ray-traced paths (`linkgym.paths`),
+the last two experimental.
 
 ![Paired goodput difference against tuned OLLA on the TDL channel and on ray-traced Munich streets](https://raw.githubusercontent.com/Tempip/linkgym/main/docs/assets/header.png)
 
@@ -171,9 +174,19 @@ per-route results, both realizations and the analysis:
 Ray-traced channel traces of 15 streets around one rooftop base station in Sionna RT's
 `munich` scene: 76 trajectories of 4000 slots (2 s at 15 m/s), 52 PRBs at 3.5 GHz, split
 by street into train, val and test, plus a second ray-tracing realization of the test
-streets. Published on Zenodo under the Open Database License (ODbL) 1.0: version v1 has
-the DOI [10.5281/zenodo.23135098](https://doi.org/10.5281/zenodo.23135098), which is the one
-to cite and the one `fetch` downloads; all versions, resolving to the latest, are under
+streets. Published on Zenodo under the Open Database License (ODbL) 1.0, in two versions;
+cite the version you use, the one `fetch` downloads:
+
+- **v1**, DOI [10.5281/zenodo.23135098](https://doi.org/10.5281/zenodo.23135098): the gain
+  per slot and PRB of a single-antenna link (`munich-v1`, 67 MB, and `munich-v1-test-alt`),
+  for `channel="trace"`. The v0.2 results use it.
+- **v2**, DOI [10.5281/zenodo.23267742](https://doi.org/10.5281/zenodo.23267742): the
+  ray-traced paths of the same trajectories (`munich-v2`, 318 MB, and
+  `munich-v2-test-alt`), from which `linkgym.paths` rebuilds the channel of every antenna of
+  a transmit array and the gains of codebook beams; a single antenna gives back the v1
+  gains. The v2 record also holds the v1 files.
+
+All versions, resolving to the latest, are under
 [10.5281/zenodo.23135097](https://doi.org/10.5281/zenodo.23135097). The scene derives from
 OpenStreetMap data, (c) OpenStreetMap contributors.
 
@@ -194,7 +207,9 @@ print(env.unwrapped.channel_info)  # trajectory, start slot, split, route catego
 
 How it was generated, its statistics and its known limitations (the ray tracing does not
 converge within the ray budget; refraction is off) are in
-[docs/channels.md](https://github.com/Tempip/linkgym/blob/main/docs/channels.md#munich-dataset).
+[docs/channels.md](https://github.com/Tempip/linkgym/blob/main/docs/channels.md#munich-dataset);
+how to use the paths of v2 with an antenna array, in
+[docs/paths.md](https://github.com/Tempip/linkgym/blob/main/docs/paths.md).
 
 ## Bring your own channel or Sionna RT scene
 
@@ -231,7 +246,7 @@ the trace format, the SNR modes and the generator.
 
 ## Building blocks for your own environment
 
-Two modules can be used outside `LinkAdaptation-v0`, for example in a multi-user or
+Three modules can be used outside `LinkAdaptation-v0`, for example in a multi-user or
 beam-management environment of your own:
 
 - **`linkgym.phy`** (stable): the link-level functions the environment's simulator uses.
@@ -241,6 +256,12 @@ beam-management environment of your own:
 - **`linkgym.beams`** (experimental): DFT codebooks for linear and planar arrays, steering
   vectors, beam gain, RSRP and best beam, consistent with Sionna RT's arrays. See
   [docs/beams.md](https://github.com/Tempip/linkgym/blob/main/docs/beams.md).
+- **`linkgym.paths`** (experimental): trace format 2, which stores the ray-traced paths of
+  a trace, and `PathTraceSource`, which rebuilds from them the channel of every antenna of
+  any transmit array (size, spacing, orientation) and the gain of every beam of a codebook,
+  as Sionna RT's synthetic arrays do. `linkgym-traces generate --store-paths` writes such
+  traces, and the Munich dataset v2 is one. See
+  [docs/paths.md](https://github.com/Tempip/linkgym/blob/main/docs/paths.md).
 
 Which parts of linkgym are stable, and what a patch or minor release may change, is set
 out in [docs/api_stability.md](https://github.com/Tempip/linkgym/blob/main/docs/api_stability.md).
@@ -354,14 +375,14 @@ Full lists:
 ## Roadmap
 
 Multi-antenna channels and beam management, one small release at a time, on top of the
-building blocks released in 0.3 (`linkgym.phy`, `linkgym.beams`); the published results
-stay unchanged.
+building blocks released in 0.3 (`linkgym.phy`, `linkgym.beams`) and 0.4 (`linkgym.paths`);
+the published results stay unchanged.
 
-- **0.4**: trace format 2, which stores the ray-traced paths at the anchors, so that the
-  per-antenna channel can be rebuilt for any array and codebook. It comes with the
-  generator option to write it, the reconstruction, an `ArrayChannelSource` interface, and
-  a Munich 3.5 GHz paths dataset on Zenodo. The element pattern and polarization are fixed
-  at generation and recorded in the attributes.
+- **0.4** (released): trace format 2, which stores the ray-traced paths at the anchors, so
+  that the per-antenna channel can be rebuilt for any array and codebook; the generator
+  option to write it (`--store-paths`), the reconstruction, the `ArrayChannelSource`
+  interface with `PathTraceSource`, and the Munich 3.5 GHz paths dataset (v2) on Zenodo. The
+  element pattern and polarization are fixed at generation and recorded in the attributes.
 - **0.5**: a cache of beam gains for a chosen array and codebook, and sampling and
   evaluation of several simultaneous users from a trace.
 - **0.6** (optional): an FR2 (28 GHz) dataset and/or a statistical multi-antenna channel
@@ -432,13 +453,13 @@ If you use linkgym, please cite it:
   author  = {Rodrigues Souza, Pedro José},
   title   = {linkgym: A Gymnasium environment for 5G NR link adaptation},
   year    = {2026},
-  version = {0.3.0},
-  doi     = {10.5281/zenodo.23141597},
+  version = {0.4.0},
   url     = {https://github.com/Tempip/linkgym}
 }
 ```
 
-and, if you use the Munich traces, the dataset version you used:
+and, if you use the Munich traces, the dataset version you used: v1 for the gains, v2 for
+the paths.
 
 ```bibtex
 @dataset{rodrigues2026munich,
@@ -448,6 +469,15 @@ and, if you use the Munich traces, the dataset version you used:
   version   = {v1},
   publisher = {Zenodo},
   doi       = {10.5281/zenodo.23135098}
+}
+
+@dataset{rodrigues2026munich_v2,
+  author    = {Rodrigues Souza, Pedro José},
+  title     = {linkgym Munich ray-traced channel traces, v2},
+  year      = {2026},
+  version   = {v2},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.23267742}
 }
 ```
 

@@ -81,7 +81,7 @@ The environment reads `gain`, `split`, `group` and `category`; the other optiona
 datasets are for analysis. `gain` is stored contiguous and uncompressed (as
 `write_trace` does), so that the window of an episode is one contiguous read.
 
-Trace format version 2 (unreleased, for v0.4.0) stores the ray-traced paths instead of
+Trace format version 2 (since 0.4.0) stores the ray-traced paths instead of
 gains, so that the channel of any transmit array can be rebuilt at load time; it has its
 own reader, `linkgym.paths`, described in [paths.md](paths.md).
 
@@ -320,7 +320,7 @@ linkgym-traces accuracy config.json --route NAME --start-m 0 --num-slots 1000
 - `generate` writes the trace. `--routes`, `--splits` and `--max-trajectories` restrict
   it, e.g. for a quick test, and `--solver KEY=VALUE ...` overrides solver settings (the
   values used are recorded in the file); an existing file is only replaced with
-  `--overwrite`. With `--store-paths` (unreleased, for v0.4.0) it writes the paths of every
+  `--overwrite`. With `--store-paths` (since 0.4.0) it writes the paths of every
   anchor instead of the gains, in trace format 2 ([paths.md](paths.md)).
 - `accuracy` compares, on one stretch of a route, a path solve at every slot with the
   anchored channel for several anchor spacings (NMSE, per-PRB and wideband gain error).
@@ -444,6 +444,16 @@ Files are cached in `$LINKGYM_DATA_DIR`, or by default in `~/.cache/linkgym`
 call; `python -m linkgym.datasets` lists the datasets. Each name points to the files of one
 Zenodo version record, so its content never changes. To regenerate the dataset instead,
 see below.
+
+**Paths (v2).** Version v2, DOI
+[10.5281/zenodo.23267742](https://doi.org/10.5281/zenodo.23267742), adds the ray-traced
+paths of the same trajectories in trace format 2: `fetch("munich-v2")` (318 MB) and
+`fetch("munich-v2-test-alt")` (74 MB), read with `linkgym.paths` to rebuild the channel of
+every antenna of a transmit array ([paths.md](paths.md)). They were generated with the same
+configuration and `--store-paths` (62 and 23 min on the same GPU); the single-antenna gains
+rebuilt from them are identical to v1 up to float32 rounding (3 of 15.8 M gains differ by
+one unit in the last place). The v2 record also holds the v1 files; the `munich-v1` names
+keep pointing to the v1 record.
 
 **Generating it.** Generate it in an environment with the `rt` extra (an RTX 3060 took
 74 min, 101-119 ms per path solve; 67 MB for 76 trajectories):

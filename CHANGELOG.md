@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-09
+
+Multi-antenna channels from ray-traced paths. The environment, the simulator, `linkgym.phy`,
+`linkgym.beams`, trace format 1 and the published results are unchanged.
+
 ### Added
 
 - Trace format 2 (`channel_kind = "paths"`), in the new experimental module
@@ -37,6 +42,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tests/data/munich_paths_sample.h5` (0.7 MB, ODbL): the paths of the first 100 slots of
   the four trajectories of the format-1 sample, made with
   `examples/rt/make_paths_sample.py`.
+- **Munich dataset v2** on Zenodo, DOI 10.5281/zenodo.23267742 (ODbL): the ray-traced paths
+  of the same trajectories as v1, generated with `--store-paths`. `linkgym.datasets.fetch`
+  knows `munich-v2` (318 MB) and `munich-v2-test-alt` (74 MB), pinned to that record. The
+  single-antenna gains rebuilt from them are identical to v1 up to float32 rounding (3 of
+  15.8 M gains differ by one unit in the last place). The record also holds the v1 files;
+  `munich-v1` and `munich-v1-test-alt` still point to the v1 record.
+
+### Changed
+
+- README: `linkgym.paths` among the building blocks, both dataset versions with their
+  DOIs and BibTeX entries, and the roadmap.
 
 ## [0.3.0] - 2026-10-04
 
@@ -163,7 +179,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation: README, `docs/environment.md`, `CONTRIBUTING.md` and `CITATION.cff`.
 - Optional extras `train` (Stable-Baselines3, TensorBoard), `dev` and `docs`.
 
-[Unreleased]: https://github.com/Tempip/linkgym/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Tempip/linkgym/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Tempip/linkgym/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Tempip/linkgym/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Tempip/linkgym/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Tempip/linkgym/releases/tag/v0.1.0

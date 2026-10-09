@@ -3,7 +3,7 @@
 Since 0.3.0.
 
 Status: **experimental** (see [api_stability.md](api_stability.md)): the names and
-conventions may still change in 0.4.
+conventions may still change in 0.5.
 
 Utilities for beam management on a planar antenna array: a DFT codebook, steering vectors,
 the gain of each beam on a channel, the RSRP of each beam and the best beam. They work on

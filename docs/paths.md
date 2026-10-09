@@ -1,6 +1,6 @@
 # Path traces and antenna arrays: `linkgym.paths`
 
-Unreleased: available on main, will ship in v0.4.0.
+Since 0.4.0.
 
 Status: **experimental** (see [api_stability.md](api_stability.md)): the names may still
 change in 0.5. The file format has its own version number (2) and stays readable.
@@ -146,6 +146,23 @@ be `"center"`.
 of the first 100 slots of the four trajectories of `munich_sample.h5`, solved again with the
 dataset's configuration by `examples/rt/make_paths_sample.py`. That script checks that the
 gains, path counts and line-of-sight flags equal those of the format-1 sample, bit for bit.
+
+### The Munich paths dataset
+
+Version v2 of the Munich dataset ([channels.md](channels.md#munich-dataset)), DOI
+[10.5281/zenodo.23267742](https://doi.org/10.5281/zenodo.23267742), holds the paths of all
+its trajectories, generated with `--store-paths`:
+
+| name | content | size |
+|---|---|---:|
+| `munich-v2` | 76 trajectories of 4000 slots, 400 path solves each: 7,836,232 paths | 318 MB |
+| `munich-v2-test-alt` | the 23 test trajectories of the second ray-tracing realization: 1,807,394 paths | 74 MB |
+
+`linkgym.datasets.fetch("munich-v2")` downloads a file once and checks its SHA-256; pass the
+path to `PathTraceSource` (below). The single-antenna gains rebuilt from these files are
+identical to those of `munich-v1` and `munich-v1-test-alt` up to float32 rounding (3 of
+15.8 M gains differ by one unit in the last place); the splits, routes, positions and mean
+gains are identical.
 
 ### Dependency on Sionna RT internals
 

@@ -19,8 +19,8 @@ of linkgym are stable, which are experimental, and what each kind of release may
 | The `linkgym-traces` command | stable | subcommands and options |
 | Trace format version 1 | stable | readable by every future linkgym version |
 | `linkgym.beams` | experimental | [beams.md](beams.md) |
-| `linkgym.paths` | experimental | unreleased, for 0.4.0: trace format 2 (paths), reconstruction, `PathTraceSource` ([paths.md](paths.md)) |
-| Trace format version 2 | experimental | unreleased, for 0.4.0 ([paths.md](paths.md)) |
+| `linkgym.paths` | experimental | since 0.4.0: trace format 2 (paths), reconstruction, `PathTraceSource` ([paths.md](paths.md)) |
+| Trace format version 2 | experimental | since 0.4.0 ([paths.md](paths.md)) |
 | The Python API of `linkgym.rt` | experimental | use the `linkgym-traces` command |
 | `linkgym.sim`, `linkgym.env`, `linkgym.config` | internal | use `linkgym.phy`, `gymnasium.make` and `linkgym.ScenarioConfig` |
 
