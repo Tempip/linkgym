@@ -18,19 +18,29 @@ import json
 import math
 import os
 from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Protocol
 
 import numpy as np
 import torch
 
-from linkgym.beams import _element_positions
-from linkgym.channels import CATEGORIES, TRACE_FORMAT, TraceFormatError, _plain
+from linkgym.beams import Codebook, _element_positions, beam_gain
+from linkgym.channels import (
+    CATEGORIES,
+    TRACE_FORMAT,
+    TraceFormatError,
+    _plain,
+    link_budget_snr_db,
+)
+from linkgym.config import SNR_MODES
 
 __all__ = [
     "CHANNEL_KIND",
     "PATH_TRACE_FORMAT_VERSION",
+    "ArrayChannelEpisode",
+    "ArrayChannelSource",
     "PathTraceInfo",
+    "PathTraceSource",
     "PathWindow",
     "inspect_path_trace",
     "read_path_window",
@@ -360,6 +370,272 @@ def read_path_window(
     with _open(path) as f:
         info = _validate(f, path)
         return _window(f, info, trajectory, offset, num_slots)
+
+
+@dataclass(frozen=True)
+class ArrayChannelEpisode:
+    """Channel of every transmit antenna in one episode, for ``batch_size`` links.
+
+    :param channel: [batch_size, num_slots, num_prbs, num_antennas] complex64 channel of
+        each antenna; antennas in ``rt.PlanarArray`` order, as in :mod:`linkgym.beams`
+    :param reference_snr_db: SNR [dB] at unit gain, as in
+        :class:`~linkgym.channels.ChannelEpisode`: `None` if the channel is normalized (the
+        scenario SNR applies), else a link budget
+    :param info: Metadata of the episode, one entry per link, as in
+        :class:`~linkgym.channels.ChannelEpisode`
+    :param beam_gain: [batch_size, num_slots, num_prbs, num_beams] float32 |w^H h|^2 of
+        every beam of the source's codebook, or `None` without a codebook
+    """
+
+    channel: torch.Tensor
+    reference_snr_db: float | np.ndarray | None = None
+    info: dict[str, Any] = field(default_factory=dict)
+    beam_gain: torch.Tensor | None = None
+
+
+class ArrayChannelSource(Protocol):
+    """Source of per-antenna channels: :class:`~linkgym.channels.ChannelSource` for arrays.
+
+    Experimental. An implementation provides ``num_prbs``, ``num_antennas`` and
+    ``generate(num_slots, batch_size, seed)``, which returns an :class:`ArrayChannelEpisode`
+    whose ``channel`` has shape [batch_size, num_slots, num_prbs, num_antennas] and depends
+    only on the arguments (``seed`` for all randomness, no global random state).
+    """
+
+    num_prbs: int
+    num_antennas: int
+
+    def generate(self, num_slots: int, batch_size: int, seed: int) -> ArrayChannelEpisode: ...
+
+
+class PathTraceSource:
+    """Per-antenna channels rebuilt from a path trace (format 2), one window per link.
+
+    The :class:`ArrayChannelSource` counterpart of
+    :class:`~linkgym.channels.TraceChannelSource`, with the same checks of the file against
+    the scenario, the same random draws of trajectories and windows for a given seed (on a
+    file with the same splits and number of slots), the same pins and the same episode
+    info. Each link is one transmitter-receiver link of a trajectory. Windows may start
+    between anchors. The file is validated once; each process opens its own read-only
+    handle on first use, so the source can be pickled; :meth:`close` releases it.
+
+    The channel of each antenna comes from :func:`reconstruct_cfr` for the array given
+    here; the element pattern, polarization and carrier frequency are those of the trace
+    (docs/paths.md).
+
+    SNR modes:
+
+    - ``"normalized"``: the channel of each trajectory is divided by the square root of its
+      ``mean_gain``, the mean single-antenna gain. A single antenna then has unit mean
+      power, as in format 1, and a beam up to ``num_antennas`` times more.
+    - ``"link_budget"``: absolute channels; the reference SNR is
+      :func:`~linkgym.channels.link_budget_snr_db` over the allocated bandwidth, for the
+      whole transmit power (unit-norm beams keep it).
+
+    :param path: Path trace (format 2)
+    :param num_prbs: Number of PRBs of the scenario; must match the file
+    :param subcarrier_spacing: Subcarrier spacing [Hz]; must match the file
+    :param carrier_frequency: Carrier frequency [Hz]; must match the file
+    :param slot_duration: Slot duration [s]; must match the file
+    :param num_slots: Longest episode to serve; trajectories must be at least this long
+    :param splits: Split labels to sample from
+    :param snr_mode: "normalized" or "link_budget"
+    :param tx_power_dbm: Transmit power [dBm], required for "link_budget"
+    :param noise_figure_db: Receiver noise figure [dB], for "link_budget"
+    :param num_rows: Rows of the transmit array
+    :param num_cols: Columns of the transmit array
+    :param spacing: (vertical, horizontal) element spacing [wavelengths]
+    :param orientation: Orientation (alpha, beta, gamma) [rad] of the array; the traced
+        transmitter's (attribute ``tx_orientation``) if `None`
+    :param codebook: Optional :class:`~linkgym.beams.Codebook` for this array; each
+        episode then also has the gain of every beam
+    """
+
+    def __init__(
+        self,
+        path: str | os.PathLike,
+        *,
+        num_prbs: int,
+        subcarrier_spacing: float,
+        carrier_frequency: float,
+        slot_duration: float,
+        num_slots: int,
+        splits: tuple[str, ...] = ("train",),
+        snr_mode: str = "normalized",
+        tx_power_dbm: float | None = None,
+        noise_figure_db: float = 7.0,
+        num_rows: int = 1,
+        num_cols: int = 1,
+        spacing: tuple[float, float] = (0.5, 0.5),
+        orientation: Sequence[float] | None = None,
+        codebook: Codebook | None = None,
+    ) -> None:
+        info = inspect_path_trace(path)
+        self.info = info
+
+        def fail(message: str) -> TraceFormatError:
+            return TraceFormatError(f"{info.path}: {message}")
+
+        if info.num_prbs != num_prbs:
+            raise fail(f"trace has {info.num_prbs} PRBs, the scenario has {num_prbs}")
+        checks = {
+            "carrier_frequency_hz": carrier_frequency,
+            "subcarrier_spacing_hz": subcarrier_spacing,
+            "slot_duration_s": slot_duration,
+        }
+        for key, value in checks.items():
+            if not math.isclose(info.attrs[key], value, rel_tol=1e-9):
+                raise fail(f"trace {key} is {info.attrs[key]}, the scenario has {value}")
+        if info.num_slots < num_slots:
+            raise fail(f"trajectories have {info.num_slots} slots, episodes need {num_slots}")
+        if not splits:
+            raise ValueError("splits must not be empty")
+        available = sorted(set(info.split))
+        unknown = [s for s in splits if s not in available]
+        if unknown:
+            raise fail(f"split(s) {unknown} not in the trace; available: {available}")
+        if snr_mode not in SNR_MODES:
+            raise ValueError(f"snr_mode must be one of {SNR_MODES}, got {snr_mode!r}")
+        if num_rows < 1 or num_cols < 1:
+            raise ValueError(
+                f"the array needs at least one row and column, got {num_rows}x{num_cols}"
+            )
+        spacing = (float(spacing[0]), float(spacing[1]))
+        if codebook is not None and (
+            (codebook.num_rows, codebook.num_cols) != (num_rows, num_cols)
+            or tuple(codebook.spacing) != spacing
+        ):
+            raise ValueError(
+                f"the codebook is for a {codebook.num_rows}x{codebook.num_cols} array with "
+                f"spacing {tuple(codebook.spacing)}, the source has {num_rows}x{num_cols} "
+                f"with spacing {spacing}"
+            )
+
+        self.num_prbs = num_prbs
+        self.num_antennas = num_rows * num_cols
+        self.splits = tuple(splits)
+        self.snr_mode = snr_mode
+        self.array = {
+            "num_rows": num_rows,
+            "num_cols": num_cols,
+            "spacing": spacing,
+            "orientation": tuple(
+                float(x)
+                for x in (info.attrs["tx_orientation"] if orientation is None else orientation)
+            ),
+        }
+        self.codebook = codebook
+        self._eligible = np.flatnonzero(np.isin(info.split, self.splits))
+        if snr_mode == "normalized":
+            zero = [int(i) for i in self._eligible if info.mean_gain[i] <= 0]
+            if zero:
+                raise fail(f"trajectories {zero} have zero mean gain; cannot normalize them")
+            self.reference_snr_db = None
+        else:
+            if tx_power_dbm is None:
+                raise ValueError("snr_mode='link_budget' requires tx_power_dbm")
+            bandwidth = num_prbs * 12 * subcarrier_spacing
+            self.reference_snr_db = link_budget_snr_db(tx_power_dbm, noise_figure_db, bandwidth)
+        self._file = None
+        self._file_pid = None
+
+    def generate(
+        self,
+        num_slots: int,
+        batch_size: int,
+        seed: int,
+        *,
+        trajectories: list[int] | np.ndarray | None = None,
+        offsets: list[int] | np.ndarray | None = None,
+    ) -> ArrayChannelEpisode:
+        """Channels of ``batch_size`` windows; random unless pinned.
+
+        :param trajectories: Pin the trajectory of each link ([batch_size] indices into the
+            file, with a split in ``splits``); requires ``offsets``
+        :param offsets: Pin the start slot of each link's window
+        """
+        info = self.info
+        if num_slots > info.num_slots:
+            raise ValueError(f"episodes of {num_slots} slots exceed the {info.num_slots} slots")
+        rng = np.random.default_rng(seed)
+        if (trajectories is None) != (offsets is None):
+            raise ValueError("pin both trajectories and offsets, or neither")
+        if trajectories is None:
+            trajectories = rng.choice(self._eligible, size=batch_size)
+            offsets = rng.integers(0, info.num_slots - num_slots + 1, size=batch_size)
+        else:
+            trajectories, offsets = self._check_pin(trajectories, offsets, num_slots, batch_size)
+        f = self._handle()
+        channels = []
+        for t, o in zip(trajectories.tolist(), offsets.tolist(), strict=True):
+            h = reconstruct_cfr(_window(f, info, t, o, num_slots), **self.array)
+            if self.snr_mode == "normalized":
+                h = h * float(1.0 / math.sqrt(info.mean_gain[t]))
+            channels.append(h)
+        channel = torch.stack(channels)
+        episode_info = {
+            "trajectory": trajectories.tolist(),
+            "offset": offsets.tolist(),
+            "split": [str(info.split[t]) for t in trajectories],
+        }
+        if info.group is not None:
+            episode_info["group"] = [int(info.group[t]) for t in trajectories]
+        if info.category is not None:
+            episode_info["category"] = [str(info.category[t]) for t in trajectories]
+        return ArrayChannelEpisode(
+            channel=channel,
+            reference_snr_db=self.reference_snr_db,
+            info=episode_info,
+            beam_gain=None if self.codebook is None else beam_gain(channel, self.codebook),
+        )
+
+    def _check_pin(self, trajectories, offsets, num_slots: int, batch_size: int):
+        trajectories = np.asarray(trajectories)
+        offsets = np.asarray(offsets)
+        if trajectories.shape != (batch_size,) or offsets.shape != (batch_size,):
+            raise ValueError(f"pin one trajectory and one offset per link ({batch_size})")
+        if trajectories.dtype.kind not in "iu" or offsets.dtype.kind not in "iu":
+            raise ValueError("trajectories and offsets must be integers")
+        not_eligible = [int(t) for t in trajectories if t not in self._eligible]
+        if not_eligible:
+            raise ValueError(
+                f"trajectories {not_eligible} are not in the splits {list(self.splits)} "
+                f"of {self.info.path}"
+            )
+        last = self.info.num_slots - num_slots
+        bad = [int(o) for o in offsets if not 0 <= o <= last]
+        if bad:
+            raise ValueError(f"offsets {bad} outside [0, {last}] for episodes of {num_slots} slots")
+        return trajectories, offsets
+
+    def close(self) -> None:
+        """Close the file handle of this process, if one is open."""
+        if self._file is not None and self._file_pid == os.getpid():
+            self._file.close()
+        self._file = None
+        self._file_pid = None
+
+    def _handle(self):
+        """A read-only handle on the file, owned by the current process."""
+        if self._file is None or self._file_pid != os.getpid():
+            self._file = _open(self.info.path)
+            self._file_pid = os.getpid()
+        return self._file
+
+    def __getstate__(self) -> dict[str, Any]:
+        # File handles belong to one process: a copy opens its own on first use
+        return self.__dict__ | {"_file": None, "_file_pid": None}
+
+
+def _is_path_trace(path: str | os.PathLike) -> bool:
+    """Whether ``path`` is an HDF5 file that declares itself a path trace (not validated)."""
+    import h5py
+
+    try:
+        with h5py.File(path, "r") as f:
+            return _plain(f.attrs.get("channel_kind")) == CHANNEL_KIND
+    except OSError:
+        return False
 
 
 def _open(path: str):

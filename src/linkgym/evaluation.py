@@ -160,15 +160,21 @@ def trace_episodes(
     ``options`` to ``env.reset`` (see :func:`evaluate_episodes`); with the same list, every
     policy faces the same channel, SNR and ACK draws in each episode.
 
+    :param trace_path: A gain trace (format 1) or a path trace (format 2, :mod:`linkgym.paths`;
+        pass the options to its source's ``generate`` as ``trajectories`` and ``offsets``)
     :param windows: Windows per trajectory; all that fit if `None`
     :output episodes: ``[{"seed", "options": {"trajectory", "offset"}, "trajectory",
         "window", "split", "group", "route", "route_trajectory", "category"}, ...]``;
         ``route`` is the route name from the generator's ``routes`` attribute (or the group)
         and ``route_trajectory`` the trajectory's rank among the route's trajectories
     """
-    from linkgym.channels import inspect_trace  # torch: not imported with linkgym
+    # torch: not imported with linkgym
+    from linkgym.channels import inspect_trace
+    from linkgym.paths import _is_path_trace, inspect_path_trace
 
-    info = inspect_trace(trace_path)
+    info = (
+        inspect_path_trace(trace_path) if _is_path_trace(trace_path) else inspect_trace(trace_path)
+    )
     fit = info.num_slots // episode_length
     windows = fit if windows is None else windows
     if not 1 <= windows <= fit:

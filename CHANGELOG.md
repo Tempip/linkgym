@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   private `Paths._k_tx` and `Paths._k_rx`, with a clear error if they are missing; a GPU
   test checks the reconstruction of 4x8 and 1x32 arrays against Sionna RT's own synthetic
   arrays.
+- `linkgym.paths.ArrayChannelSource`, the per-antenna counterpart of `ChannelSource`
+  (`ArrayChannelEpisode`: channel [batch, slots, PRBs, antennas]), and
+  `linkgym.paths.PathTraceSource`, which serves the channels of any transmit array from a
+  path trace with the checks, random draws, pins and episode info of
+  `TraceChannelSource`, and the gain of every beam of an optional codebook. In
+  `normalized` mode a single antenna has unit mean power, as in format 1.
+- `linkgym.evaluation.trace_episodes` also lists the episodes of a path trace.
 - `tests/data/munich_paths_sample.h5` (0.7 MB, ODbL): the paths of the first 100 slots of
   the four trajectories of the format-1 sample, made with
   `examples/rt/make_paths_sample.py`.
